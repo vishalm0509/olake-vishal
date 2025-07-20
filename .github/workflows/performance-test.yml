@@ -80,7 +80,9 @@ jobs:
       run: go mod download
 
     - name: Build Project
-      run: go build -v ./...
+      run: |
+       packages=$(go list ./... | grep -v '/destination/iceberg/local-test')
+       go build -v $packages
 
     - name: Build Iceberg Sink
       working-directory: ./destination/iceberg/olake-iceberg-java-writer
