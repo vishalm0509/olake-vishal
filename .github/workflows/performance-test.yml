@@ -94,9 +94,6 @@ jobs:
 
     - name: Create source.json from secrets
       run: |
-        echo '${{ secrets.MYSQL_SOURCE_JSON }}' > ./drivers/mysql/internal/testconfig/source.json
-        echo '${{ secrets.POSTGRES_SOURCE_JSON }}' > ./drivers/postgres/internal/testconfig/source.json
-        echo '${{ secrets.ORACLE_SOURCE_JSON }}' > ./drivers/oracle/internal/testconfig/source.json
         echo '${{ secrets.MONGODB_SOURCE_JSON }}' > ./drivers/mongodb/internal/testconfig/source.json
 
     - name: Create destination.json from secrets
