@@ -76,13 +76,9 @@ jobs:
        packages=$(go list ./... | grep -v '/destination/iceberg/local-test')
        go build -v $packages
 
-    - name: Build Iceberg Sink
-      working-directory: ./destination/iceberg/olake-iceberg-java-writer
-      run: mvn clean package -DskipTests
-
     - name: Start Test Infrastructure
       run: |
-        docker compose -f ./destination/iceberg/local-test/docker-compose.yml up minio mc postgres spark-iceberg -d
+        docker compose -f ./destination/iceberg/local-test/docker-compose.yml up -d
 
     - name: Set up Data Directories
       run: |
@@ -91,6 +87,11 @@ jobs:
         sudo mkdir -p /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data/ivy-cache
         sudo chown -R 999:999 /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data
         sudo chmod -R 777 /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data
+
+    - name: Build Iceberg Sink
+      working-directory: ./destination/iceberg/olake-iceberg-java-writer
+      run: mvn clean package -DskipTests
+
 
     - name: Create testconfig directories
       run: |
