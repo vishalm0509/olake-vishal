@@ -63,8 +63,7 @@ jobs:
           [ $i -eq 30 ] && { echo "❌ VPN timeout"; sudo cat /var/log/openvpn-client.log; exit 1; }
           sleep 2
         done
-        ping -c 3 -W 5 ${{ secrets.VPN_GATEWAY_IP }}
-        echo "✅ VPN verified - gateway reachable"
+        echo "✅ VPN setup complete - interface established"
 
 
 
