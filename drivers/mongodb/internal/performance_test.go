@@ -48,7 +48,16 @@ func setupDatabaseForCDC(ctx context.Context, conn interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid connection type")
 	}
-	db.Database("schitiz_test").Collection("users_cdc").Drop(ctx)
+	collection := db.Database("schitiz_test").Collection("users_cdc")
+
+	if err := collection.Drop(ctx); err != nil {
+		return err
+	}
+
+	if _, err := collection.InsertOne(ctx, bson.M{}); err != nil {
+		return err
+	}
+
 	return nil
 }
 

@@ -142,6 +142,7 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 					fmt.Sprintf("%s:/test-olake:rw", config.TestConfig.HostRoot),
 				}
 				hc.ExtraHosts = append(hc.ExtraHosts, "host.docker.internal:host-gateway")
+				hc.NetworkMode = "host"
 			},
 			ConfigModifier: func(c *container.Config) {
 				c.WorkingDir = "/test-olake"
@@ -151,12 +152,12 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 					PostReadies: []testcontainers.ContainerHook{
 						func(ctx context.Context, c testcontainers.Container) error {
 							_, output, err := utils.ExecContainerCmd(ctx, c, InstallCmd())
-							t.Log("🟡 Installed dependencies")
 							require.NoError(t, err, fmt.Sprintf("Failed to install dependencies:\n%s", string(output)))
+							t.Log("🟡 Installed dependencies")
 
 							conn, err := config.ConnectDB(ctx)
-							t.Log("🟡 Connected to database")
 							require.NoError(t, err, "Failed to connect to database")
+							t.Log("🟡 Connected to database")
 							defer func() {
 								if err := config.CloseDB(conn); err != nil {
 									t.Logf("warning: failed to close database connection: %v", err)
