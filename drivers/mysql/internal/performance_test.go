@@ -32,7 +32,6 @@ func connectDatabase(ctx context.Context) (interface{}, error) {
 		return nil, err
 	}
 	if err := cfg.Setup(ctx); err != nil {
-		fmt.Println("🟡 Error setting up database", err)
 		return nil, err
 	}
 	return cfg.client, nil
