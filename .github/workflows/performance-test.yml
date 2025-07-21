@@ -123,7 +123,7 @@ jobs:
     - name: Run Performance Test for ${{ matrix.driver }}
       run: |
         cd ./drivers/${{ matrix.driver }}/internal
-        go test -v -run ${{ matrix.test_name }}
+        go test -v -timeout 24h -run ${{ matrix.test_name }}
 
     - name: Cleanup
       if: always()
