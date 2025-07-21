@@ -64,6 +64,12 @@ jobs:
           [ $i -eq 30 ] && { echo "❌ VPN timeout"; sudo cat /var/log/openvpn-client.log; exit 1; }
           sleep 2
         done
+        echo "Adding manual route for private network..."
+        sudo ip route add 10.8.0.0/16 dev tun0
+
+        echo "--- Current IP Routes ---"
+        ip route
+        echo "-------------------------"
         echo "✅ VPN setup complete - interface established"
 
     - name: Install Go Dependencies
