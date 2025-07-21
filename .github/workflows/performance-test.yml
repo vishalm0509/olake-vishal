@@ -19,6 +19,7 @@ jobs:
   performance-tests:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         driver: [ postgres, oracle, mongodb, mysql ]
         include:
