@@ -20,10 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        driver: [ postgres, oracle, mongodb ]
+        driver: [ postgres, oracle, mongodb, mysql ]
         include:
-        # - driver: mysql
-        #   test_name: TestMySQLPerformance
+        - driver: mysql
+          test_name: TestMySQLPerformance
         - driver: postgres
           test_name: TestPostgresPerformance
         - driver: oracle
@@ -101,6 +101,8 @@ jobs:
           echo '${{ secrets.POSTGRES_SOURCE_JSON }}' | base64 --decode > ./drivers/postgres/internal/testconfig/source.json
         elif [ "${{ matrix.driver }}" = "oracle" ]; then
           echo '${{ secrets.ORACLE_SOURCE_JSON }}' | base64 --decode > ./drivers/oracle/internal/testconfig/source.json
+        elif [ "${{ matrix.driver }}" = "mysql" ]; then
+          echo '${{ secrets.MYSQL_SOURCE_JSON }}' | base64 --decode > ./drivers/mysql/internal/testconfig/source.json
         fi
 
     - name: Create destination.json from secrets
