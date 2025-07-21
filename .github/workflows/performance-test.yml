@@ -46,6 +46,23 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
+    - name: Setup VPN Client
+      run: |
+        # Install, configure, and connect in one step
+        sudo apt-get update -qq && sudo apt-get install -y openvpn iproute2 iputils-ping netcat-openbsd
+        sudo mkdir -p /etc/openvpn/client && sudo chmod 700 /etc/openvpn/client
+        echo "${{ secrets.OPENVPN_CONFIG }}" | base64 --decode | sudo tee /etc/openvpn/client/client.ovpn > /dev/null
+        echo "${{ secrets.OPENVPN_USERNAME }}" | sudo tee /etc/openvpn/client/auth.txt > /dev/null
+        sudo chmod 600 /etc/openvpn/client/* && sudo chown root:root /etc/openvpn/client/*
+        sudo openvpn --config /etc/openvpn/client/client.ovpn --daemon ovpn-client --log /var/log/openvpn-client.log --verb 3
+        echo "Establishing VPN connection..."
+        for i in {1..30}; do
+          if ip addr show | grep -q "tun0\|tap0"; then echo "✅ VPN connected"; break; fi
+          [ $i -eq 30 ] && { echo "❌ VPN timeout"; sudo cat /var/log/openvpn-client.log; exit 1; }
+          sleep 2
+        done
+        ping -c 1 -W 3 ${{ secrets.VPN_GATEWAY_IP }} && echo "✅ VPN verified"
+
 
 
     # - name: Wait for MySQL
@@ -118,6 +135,12 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
+        # VPN Cleanup
+        sudo pkill -f "openvpn.*client.ovpn" || true
+        sudo rm -rf /etc/openvpn/client/ /var/log/openvpn-client.log || true
+        echo "VPN cleanup completed"
+        
+        # Docker Cleanup
         docker compose -f ./destination/iceberg/local-test/docker-compose.yml down
         docker compose -f ./drivers/mysql/docker-compose.yml down
         docker compose -f ./drivers/postgres/docker-compose.yml down
