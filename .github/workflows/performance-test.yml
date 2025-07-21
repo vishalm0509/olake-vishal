@@ -49,11 +49,13 @@ jobs:
     - name: Setup VPN Client
       run: |
         # Install, configure, and connect in one step
+        set -eo pipefail
         sudo apt-get update -qq && sudo apt-get install -y openvpn iproute2 iputils-ping netcat-openbsd
         sudo mkdir -p /etc/openvpn/client && sudo chmod 700 /etc/openvpn/client
         echo "${{ secrets.OPENVPN_CONFIG }}" | base64 --decode | sudo tee /etc/openvpn/client/client.ovpn > /dev/null
         echo "${{ secrets.OPENVPN_USERNAME }}" | sudo tee /etc/openvpn/client/auth.txt > /dev/null
-        sudo chmod 600 /etc/openvpn/client/* && sudo chown root:root /etc/openvpn/client/*
+        sudo chmod 600 /etc/openvpn/client/client.ovpn /etc/openvpn/client/auth.txt
+        sudo chown root:root /etc/openvpn/client/client.ovpn /etc/openvpn/client/auth.txt
         sudo openvpn --config /etc/openvpn/client/client.ovpn --daemon ovpn-client --log /var/log/openvpn-client.log --verb 3
         echo "Establishing VPN connection..."
         for i in {1..30}; do
@@ -61,7 +63,8 @@ jobs:
           [ $i -eq 30 ] && { echo "❌ VPN timeout"; sudo cat /var/log/openvpn-client.log; exit 1; }
           sleep 2
         done
-        ping -c 1 -W 3 ${{ secrets.VPN_GATEWAY_IP }} && echo "✅ VPN verified"
+        ping -c 3 -W 5 ${{ secrets.VPN_GATEWAY_IP }}
+        echo "✅ VPN verified - gateway reachable"
 
 
 
