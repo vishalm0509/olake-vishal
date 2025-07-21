@@ -20,14 +20,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        driver: [ mongodb ]
+        driver: [ postgres, oracle, mongodb ]
         include:
         # - driver: mysql
         #   test_name: TestMySQLPerformance
-        # - driver: postgres
-        #   test_name: TestPostgresPerformance
-        # - driver: oracle
-        #   test_name: TestOraclePerformance
+        - driver: postgres
+          test_name: TestPostgresPerformance
+        - driver: oracle
+          test_name: TestOraclePerformance
         - driver: mongodb
           test_name: TestMongodbPerformance
 
@@ -65,26 +65,6 @@ jobs:
         done
         echo "✅ VPN setup complete - interface established"
 
-    # - name: Wait for MySQL
-    #   uses: nick-fields/retry@v2
-    #   with:
-    #     timeout_minutes: 5
-    #     max_attempts: 30
-    #     retry_wait_seconds: 5
-    #     command: |
-    #       docker exec olake_mysql-test mysql -h localhost -u root -p${{ env.MYSQL_ROOT_PASSWORD }} -e "SELECT 1"
-
-    # - name: Wait for PostgreSQL
-    #   uses: nick-fields/retry@v2
-    #   with:
-    #     timeout_minutes: 5
-    #     max_attempts: 30
-    #     retry_wait_seconds: 5
-    #     command: |
-    #       docker exec olake_postgres-test psql -h localhost -U postgres -d postgres -c "SELECT 1"
-
-
-
     - name: Install Go Dependencies
       run: go mod download
 
@@ -115,11 +95,13 @@ jobs:
 
     - name: Create source.json from secrets
       run: |
-        echo '${{ secrets.MONGODB_SOURCE_JSON }}' > ./drivers/mongodb/internal/testconfig/source.json
+        echo '${{ secrets.MONGODB_SOURCE_JSON }}' | base64 --decode > ./drivers/mongodb/internal/testconfig/source.json
+        echo '${{ secrets.POSTGRES_SOURCE_JSON }}' | base64 --decode > ./drivers/postgres/internal/testconfig/source.json
+        echo '${{ secrets.ORACLE_SOURCE_JSON }}' | base64 --decode > ./drivers/oracle/internal/testconfig/source.json
 
     - name: Create destination.json from secrets
       run: |
-        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/${{ matrix.driver }}/internal/testconfig/destination.json
+        echo '${{ secrets.DESTINATION_JSON }}' | base64 --decode > ./drivers/${{ matrix.driver }}/internal/testconfig/destination.json
 
     - name: Create benchmark files
       run: |
