@@ -151,9 +151,11 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 					PostReadies: []testcontainers.ContainerHook{
 						func(ctx context.Context, c testcontainers.Container) error {
 							_, output, err := utils.ExecContainerCmd(ctx, c, InstallCmd())
+							t.Log("🟡 Installed dependencies")
 							require.NoError(t, err, fmt.Sprintf("Failed to install dependencies:\n%s", string(output)))
 
 							conn, err := config.ConnectDB(ctx)
+							t.Log("🟡 Connected to database")
 							require.NoError(t, err, "Failed to connect to database")
 							defer func() {
 								if err := config.CloseDB(conn); err != nil {
@@ -166,15 +168,18 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 								_, output, err := utils.ExecContainerCmd(ctx, c, discoverCmd)
 								require.NoError(t, err, fmt.Sprintf("Failed to perform discover:\n%s", string(output)))
 								t.Log(string(output))
+								t.Log("🟡 Discover completed")
 
 								updateStreamsCmd := updateStreamsCommand(*config.TestConfig, config.Namespace, config.BackfillStreams...)
 								_, _, err = utils.ExecContainerCmd(ctx, c, updateStreamsCmd)
 								require.NoError(t, err, "Failed to update streams")
+								t.Log("🟡 Streams updated")
 
 								syncCmd := syncCommand(*config.TestConfig, true)
 								_, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
 								require.NoError(t, err, fmt.Sprintf("Failed to perform sync:\n%s", string(output)))
 								t.Log(string(output))
+								t.Log("🟡 Sync completed")
 
 								success, err := IsRPSAboveBenchmark(*config.TestConfig, true)
 								require.NoError(t, err, "Failed to check RPS", err)

@@ -14,7 +14,7 @@ import (
 func TestMongodbPerformance(t *testing.T) {
 	config := testutils.PerformanceTestConfig{
 		TestConfig:      testutils.GetTestConfig("mongodb"),
-		Namespace:       "test",
+		Namespace:       "schitiz_test",
 		BackfillStreams: []string{"users"},
 		CDCStreams:      []string{"users_cdc"},
 		ConnectDB:       connectDatabase,
@@ -48,7 +48,7 @@ func setupDatabaseForCDC(ctx context.Context, conn interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid connection type")
 	}
-	db.Database("mongodb").Collection("users_cdc").Drop(ctx)
+	db.Database("schitiz_test").Collection("users_cdc").Drop(ctx)
 	return nil
 }
 
@@ -57,6 +57,6 @@ func triggerMongodbCDC(ctx context.Context, conn interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid connection type")
 	}
-	db.Database("mongodb").Collection("users_cdc").InsertOne(ctx, bson.M{"name": "test"})
+	db.Database("schitiz_test").Collection("users_cdc").InsertOne(ctx, bson.M{"name": "test"})
 	return nil
 }
