@@ -95,9 +95,13 @@ jobs:
 
     - name: Create source.json from secrets
       run: |
-        echo '${{ secrets.MONGODB_SOURCE_JSON }}' | base64 --decode > ./drivers/mongodb/internal/testconfig/source.json
-        echo '${{ secrets.POSTGRES_SOURCE_JSON }}' | base64 --decode > ./drivers/postgres/internal/testconfig/source.json
-        echo '${{ secrets.ORACLE_SOURCE_JSON }}' | base64 --decode > ./drivers/oracle/internal/testconfig/source.json
+        if [ "${{ matrix.driver }}" = "mongodb" ]; then
+          echo '${{ secrets.MONGODB_SOURCE_JSON }}' | base64 --decode > ./drivers/mongodb/internal/testconfig/source.json
+        elif [ "${{ matrix.driver }}" = "postgres" ]; then
+          echo '${{ secrets.POSTGRES_SOURCE_JSON }}' | base64 --decode > ./drivers/postgres/internal/testconfig/source.json
+        elif [ "${{ matrix.driver }}" = "oracle" ]; then
+          echo '${{ secrets.ORACLE_SOURCE_JSON }}' | base64 --decode > ./drivers/oracle/internal/testconfig/source.json
+        fi
 
     - name: Create destination.json from secrets
       run: |
