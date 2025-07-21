@@ -77,8 +77,7 @@ jobs:
 
     - name: Build Project
       run: |
-        packages=$(go list ./... | grep -v '/destination/iceberg/local-test')
-        go build -v $packages
+        go build -v ./...
 
     - name: Start Test Infrastructure
       run: |
