@@ -50,6 +50,10 @@ jobs:
           [ $i -eq 30 ] && { echo "❌ VPN timeout"; sudo cat /var/log/openvpn-client.log; exit 1; }
           sleep 2
         done
+        # --- CORRECTED LOCATION: Configure DNS only AFTER tun0 exists ---
+        echo "Configuring split DNS for the tun0 interface..."
+        sudo resolvectl dns tun0 10.8.0.1
+        sudo resolvectl domain tun0 ~private.postgres.database.azure.com
         echo "--- Current IP Routes ---"
         ip route
         echo "-------------------------"
@@ -113,6 +117,7 @@ jobs:
     - name: Run Performance Tests
       run: |
         go test -v -p 2 ./drivers/mysql/internal/...  ./drivers/mongodb/internal/... -timeout 0 -run 'Performance'
+        go test -v -p 2 ./drivers/oracle/internal/...  ./drivers/postgres/internal/... -timeout 0 -run 'Performance'
 
     - name: Cleanup
       if: always()
