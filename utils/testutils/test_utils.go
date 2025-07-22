@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/datazip-inc/olake/utils"
 	"github.com/docker/docker/api/types/container"
@@ -168,6 +169,7 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 							}()
 
 							t.Run("backfill", func(t *testing.T) {
+								t.Log("⚪️", time.Now())
 								discoverCmd := discoverCommand(*config.TestConfig)
 								_, output, err := utils.ExecContainerCmd(ctx, c, discoverCmd)
 								require.NoError(t, err, fmt.Sprintf("Failed to perform discover:\n%s", string(output)))
@@ -193,6 +195,7 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 
 							if config.SupportsCDC {
 								t.Run("cdc", func(t *testing.T) {
+									t.Log("⚪️", time.Now())
 									err := config.SetupCDC(ctx, conn)
 									require.NoError(t, err, "Failed to setup database for CDC")
 
