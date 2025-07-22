@@ -37,7 +37,7 @@ jobs:
       run: |
         # Install, configure, and connect in one step
         set -eo pipefail
-        sudo apt-get update -qq && sudo apt-get install -y openvpn iproute2 iputils-ping netcat-openbsd
+        sudo apt-get update -qq && sudo apt-get install -y openvpn iproute2 iputils-ping netcat-openbsd telnet
         sudo mkdir -p /etc/openvpn/client && sudo chmod 700 /etc/openvpn/client
         echo "${{ secrets.OPENVPN_CONFIG }}" | base64 --decode | sudo tee /etc/openvpn/client/client.ovpn > /dev/null
         echo "${{ secrets.OPENVPN_USERNAME }}" | sudo tee /etc/openvpn/client/auth.txt > /dev/null
@@ -50,10 +50,6 @@ jobs:
           [ $i -eq 30 ] && { echo "❌ VPN timeout"; sudo cat /var/log/openvpn-client.log; exit 1; }
           sleep 2
         done
-
-        echo "Adding manual route for private network..."
-        sudo ip route add 10.8.0.0/16 dev tun0
-
         echo "--- Current IP Routes ---"
         ip route
         echo "-------------------------"
