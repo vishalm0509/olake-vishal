@@ -112,7 +112,7 @@ jobs:
     - name: Create destination.json from secrets
       run: |
         echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/postgres/internal/testconfig/destination.json
-        echo '${{ secrets.MYSQL_DESTINATION_JSON }}' > ./drivers/mysql/internal/testconfig/destination.json
+        echo '${{ secrets.MYSQL_DESTINATION_JSON }}' | base64 --decode > ./drivers/mysql/internal/testconfig/destination.json
         echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/oracle/internal/testconfig/destination.json
         echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/mongodb/internal/testconfig/destination.json
 
