@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/datazip-inc/olake/utils"
 	"github.com/docker/docker/api/types/container"
@@ -168,64 +167,61 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 								}
 							}()
 
-							t.Run("backfill", func(t *testing.T) {
-								t.Log("⚪️", time.Now())
+							t.Log("⚪️", "Starting backfill")
+							discoverCmd := discoverCommand(*config.TestConfig)
+							_, output, err = utils.ExecContainerCmd(ctx, c, discoverCmd)
+							require.NoError(t, err, fmt.Sprintf("Failed to perform discover:\n%s", string(output)))
+							t.Log(string(output))
+							t.Log("🟡 Discover completed")
+
+							updateStreamsCmd := updateStreamsCommand(*config.TestConfig, config.Namespace, config.BackfillStreams...)
+							_, _, err = utils.ExecContainerCmd(ctx, c, updateStreamsCmd)
+							require.NoError(t, err, "Failed to update streams")
+							t.Log("🟡 Streams updated")
+
+							syncCmd := syncCommand(*config.TestConfig, true)
+							_, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
+							require.NoError(t, err, fmt.Sprintf("Failed to perform sync:\n%s", string(output)))
+							t.Log(string(output))
+							t.Log("🟡 Sync completed")
+
+							success, err := IsRPSAboveBenchmark(*config.TestConfig, true)
+							require.NoError(t, err, "Failed to check RPS", err)
+							require.True(t, success, fmt.Sprintf("%s backfill performance below benchmark", config.TestConfig.Driver))
+							t.Logf("✅ SUCCESS: %s backfill", config.TestConfig.Driver)
+
+							if config.SupportsCDC {
+								t.Log("⚪️", "Starting CDC")
+								err := config.SetupCDC(ctx, conn)
+								require.NoError(t, err, "Failed to setup database for CDC")
+
 								discoverCmd := discoverCommand(*config.TestConfig)
 								_, output, err := utils.ExecContainerCmd(ctx, c, discoverCmd)
 								require.NoError(t, err, fmt.Sprintf("Failed to perform discover:\n%s", string(output)))
 								t.Log(string(output))
-								t.Log("🟡 Discover completed")
 
-								updateStreamsCmd := updateStreamsCommand(*config.TestConfig, config.Namespace, config.BackfillStreams...)
+								updateStreamsCmd := updateStreamsCommand(*config.TestConfig, config.Namespace, config.CDCStreams...)
 								_, _, err = utils.ExecContainerCmd(ctx, c, updateStreamsCmd)
 								require.NoError(t, err, "Failed to update streams")
-								t.Log("🟡 Streams updated")
 
 								syncCmd := syncCommand(*config.TestConfig, true)
 								_, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
-								require.NoError(t, err, fmt.Sprintf("Failed to perform sync:\n%s", string(output)))
+								require.NoError(t, err, fmt.Sprintf("Failed to perform initial sync:\n%s", string(output)))
 								t.Log(string(output))
-								t.Log("🟡 Sync completed")
 
-								success, err := IsRPSAboveBenchmark(*config.TestConfig, true)
+								err = config.TriggerCDC(ctx, conn)
+								require.NoError(t, err, "Failed to trigger CDC change")
+
+								syncCmd = syncCommand(*config.TestConfig, false)
+								_, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
+								require.NoError(t, err, fmt.Sprintf("Failed to perform CDC sync:\n%s", string(output)))
+								t.Log(string(output))
+
+								success, err := IsRPSAboveBenchmark(*config.TestConfig, false)
 								require.NoError(t, err, "Failed to check RPS", err)
-								require.True(t, success, fmt.Sprintf("%s backfill performance below benchmark", config.TestConfig.Driver))
-								t.Logf("✅ SUCCESS: %s backfill", config.TestConfig.Driver)
-							})
+								require.True(t, success, fmt.Sprintf("%s CDC performance below benchmark", config.TestConfig.Driver))
+								t.Logf("✅ SUCCESS: %s cdc", config.TestConfig.Driver)
 
-							if config.SupportsCDC {
-								t.Run("cdc", func(t *testing.T) {
-									t.Log("⚪️", time.Now())
-									err := config.SetupCDC(ctx, conn)
-									require.NoError(t, err, "Failed to setup database for CDC")
-
-									discoverCmd := discoverCommand(*config.TestConfig)
-									_, output, err := utils.ExecContainerCmd(ctx, c, discoverCmd)
-									require.NoError(t, err, fmt.Sprintf("Failed to perform discover:\n%s", string(output)))
-									t.Log(string(output))
-
-									updateStreamsCmd := updateStreamsCommand(*config.TestConfig, config.Namespace, config.CDCStreams...)
-									_, _, err = utils.ExecContainerCmd(ctx, c, updateStreamsCmd)
-									require.NoError(t, err, "Failed to update streams")
-
-									syncCmd := syncCommand(*config.TestConfig, true)
-									_, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
-									require.NoError(t, err, fmt.Sprintf("Failed to perform initial sync:\n%s", string(output)))
-									t.Log(string(output))
-
-									err = config.TriggerCDC(ctx, conn)
-									require.NoError(t, err, "Failed to trigger CDC change")
-
-									syncCmd = syncCommand(*config.TestConfig, false)
-									_, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
-									require.NoError(t, err, fmt.Sprintf("Failed to perform CDC sync:\n%s", string(output)))
-									t.Log(string(output))
-
-									success, err := IsRPSAboveBenchmark(*config.TestConfig, false)
-									require.NoError(t, err, "Failed to check RPS", err)
-									require.True(t, success, fmt.Sprintf("%s CDC performance below benchmark", config.TestConfig.Driver))
-									t.Logf("✅ SUCCESS: %s cdc", config.TestConfig.Driver)
-								})
 							}
 							return nil
 						},
