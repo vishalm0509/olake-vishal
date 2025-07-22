@@ -67,29 +67,12 @@ jobs:
         role-to-assume: ${{ secrets.AWS_GITHUB_ROLE }}
         aws-region: ap-south-1
 
-    - name: Verify AWS Identity
-      run: |
-        echo "AWS Credentials configured"
-        aws sts get-caller-identity
-
     - name: Install Go Dependencies
       run: go mod download
 
     - name: Build Project
       run: |
         go build -v ./...
-
-    - name: Start Test Infrastructure
-      run: |
-        docker compose -f ./destination/iceberg/local-test/docker-compose.yml up -d
-
-    - name: Set up Data Directories
-      run: |
-        sudo mkdir -p /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data/postgres-data
-        sudo mkdir -p /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data/minio-data
-        sudo mkdir -p /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data/ivy-cache
-        sudo chown -R 999:999 /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data
-        sudo chmod -R 777 /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data
 
     - name: Build Iceberg Sink
       working-directory: ./destination/iceberg/olake-iceberg-java-writer
@@ -102,19 +85,19 @@ jobs:
         mkdir -p ./drivers/oracle/internal/testconfig
         mkdir -p ./drivers/mongodb/internal/testconfig
 
-    - name: Create source.json from secrets
+    - name: Create source
       run: |
         echo '${{ secrets.POSTGRES_SOURCE_JSON }}' | base64 --decode > ./drivers/postgres/internal/testconfig/source.json
         echo '${{ secrets.MYSQL_SOURCE_JSON }}' | base64 --decode > ./drivers/mysql/internal/testconfig/source.json
         echo '${{ secrets.ORACLE_SOURCE_JSON }}' | base64 --decode > ./drivers/oracle/internal/testconfig/source.json
         echo '${{ secrets.MONGODB_SOURCE_JSON }}' | base64 --decode > ./drivers/mongodb/internal/testconfig/source.json
 
-    - name: Create destination.json from secrets
+    - name: Create destinations
       run: |
-        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/postgres/internal/testconfig/destination.json
+        echo '${{ secrets.POSTGRES_DESTINATION_JSON }}' | base64 --decode > ./drivers/postgres/internal/testconfig/destination.json
         echo '${{ secrets.MYSQL_DESTINATION_JSON }}' | base64 --decode > ./drivers/mysql/internal/testconfig/destination.json
-        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/oracle/internal/testconfig/destination.json
-        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/mongodb/internal/testconfig/destination.json
+        echo '${{ secrets.ORACLE_DESTINATION_JSON }}' | base64 --decode > ./drivers/oracle/internal/testconfig/destination.json
+        echo '${{ secrets.MONGO_DESTINATION_JSON }}' | base64 --decode > ./drivers/mongodb/internal/testconfig/destination.json
 
     - name: Create benchmark files
       run: |
@@ -129,21 +112,20 @@ jobs:
 
     - name: Run Performance Tests
       run: |
-        go test -v ./drivers/mysql/internal/... -timeout 0 -run 'Performance'
+        go test -v -p 2 ./drivers/mysql/internal/... ./drivers/mongodb/internal/... -timeout 0 -run 'Performance'
+        go test -v -p 2 ./drivers/oracle/internal/... ./drivers/postgres/internal/... -timeout 0 -run 'Performance'
 
     - name: Cleanup
       if: always()
       run: |
         # Drop database from catalog
-        aws glue delete-database --name performance_mysql || echo "failed to delete database"
+        aws glue delete-database --name performance_mysql || echo "failed to delete mysql database"
+        aws glue delete-database --name performance_postgres || echo "failed to delete postgres database"
+        aws glue delete-database --name performance_oracle || echo "failed to delete oracle database"
+        aws glue delete-database --name performance_mongodb || echo "failed to delete mongodb database"
         echo "Catalog cleanup completed"
 
         # VPN Cleanup
         sudo pkill -f "openvpn.*client.ovpn" || true
         sudo rm -rf /etc/openvpn/client/ /var/log/openvpn-client.log || true
         echo "VPN cleanup completed"
-
-        # Docker Cleanup
-        docker compose -f ./destination/iceberg/local-test/docker-compose.yml down
-        docker compose -f ./drivers/mysql/docker-compose.yml down
-        docker compose -f ./drivers/postgres/docker-compose.yml down
