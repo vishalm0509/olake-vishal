@@ -51,88 +51,75 @@ jobs:
           sleep 2
         done
 
-        echo "Adding manual route for private network..."
-        sudo ip route add 10.8.0.0/16 dev tun0
+        cat /etc/resolv.conf
+        echo "Forcing DNS to use VPN resolver..."
+        # This command overwrites the file with only your nameserver
+        echo "nameserver 10.8.0.1" | sudo tee /etc/resolv.conf
+        cat /etc/resolv.conf
 
         echo "--- Current IP Routes ---"
         ip route
         echo "-------------------------"
         echo "✅ VPN setup complete - interface established"
-    
-    - name: 1. Test Connection from Host
+
+    - name: Install Go Dependencies
+      run: go mod download
+
+    - name: Build Project
       run: |
-        echo "--- Testing TCP connection from Host to MySQL ---"
-        # nc -z (zero-I/O mode) -v (verbose) -w 10 (timeout 10s)
-        telnet 172.31.32.11 3307
-        echo "--- Testing TCP connection from Host to Oracle ---"
-        telnet dz-stag-oracle-rds.ct8oam0wodxr.ap-south-1.rds.amazonaws.com 1521
-        echo "--- Testing TCP connection from Host to MongoDB ---"
-        telnet 172.31.16.5 27017
+        go build -v ./...
 
-    - name: 2. Test Connection from Basic Docker Container
+    - name: Start Test Infrastructure
       run: |
-        echo "--- Testing TCP connection from Container to MySQL ---" realworld/telnet:latest
-        # --rm (cleans up) --network host (the key setting)
-        docker run --rm --network host str0ke/telnet:latest 172.31.32.11 3307
+        docker compose -f ./destination/iceberg/local-test/docker-compose.yml up -d
 
-    # - name: Install Go Dependencies
-    #   run: go mod download
+    - name: Set up Data Directories
+      run: |
+        sudo mkdir -p /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data/postgres-data
+        sudo mkdir -p /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data/minio-data
+        sudo mkdir -p /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data/ivy-cache
+        sudo chown -R 999:999 /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data
+        sudo chmod -R 777 /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data
 
-    # - name: Build Project
-    #   run: |
-    #     go build -v ./...
+    - name: Build Iceberg Sink
+      working-directory: ./destination/iceberg/olake-iceberg-java-writer
+      run: mvn clean package -DskipTests
 
-    # - name: Start Test Infrastructure
-    #   run: |
-    #     docker compose -f ./destination/iceberg/local-test/docker-compose.yml up -d
+    - name: Create testconfig directories
+      run: |
+        mkdir -p ./drivers/postgres/internal/testconfig
+        mkdir -p ./drivers/mysql/internal/testconfig
+        mkdir -p ./drivers/oracle/internal/testconfig
+        mkdir -p ./drivers/mongodb/internal/testconfig
 
-    # - name: Set up Data Directories
-    #   run: |
-    #     sudo mkdir -p /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data/postgres-data
-    #     sudo mkdir -p /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data/minio-data
-    #     sudo mkdir -p /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data/ivy-cache
-    #     sudo chown -R 999:999 /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data
-    #     sudo chmod -R 777 /home/runner/work/olake-vishal/olake-vishal/destination/iceberg/local-test/data
+    - name: Create source.json from secrets
+      run: |
+        echo '${{ secrets.POSTGRES_SOURCE_JSON }}' | base64 --decode > ./drivers/postgres/internal/testconfig/source.json
+        echo '${{ secrets.MYSQL_SOURCE_JSON }}' | base64 --decode > ./drivers/mysql/internal/testconfig/source.json
+        echo '${{ secrets.ORACLE_SOURCE_JSON }}' | base64 --decode > ./drivers/oracle/internal/testconfig/source.json
+        echo '${{ secrets.MONGODB_SOURCE_JSON }}' | base64 --decode > ./drivers/mongodb/internal/testconfig/source.json
 
-    # - name: Build Iceberg Sink
-    #   working-directory: ./destination/iceberg/olake-iceberg-java-writer
-    #   run: mvn clean package -DskipTests
+    - name: Create destination.json from secrets
+      run: |
+        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/postgres/internal/testconfig/destination.json
+        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/mysql/internal/testconfig/destination.json
+        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/oracle/internal/testconfig/destination.json
+        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/mongodb/internal/testconfig/destination.json
 
-    # - name: Create testconfig directories
-    #   run: |
-    #     mkdir -p ./drivers/postgres/internal/testconfig
-    #     mkdir -p ./drivers/mysql/internal/testconfig
-    #     mkdir -p ./drivers/oracle/internal/testconfig
-    #     mkdir -p ./drivers/mongodb/internal/testconfig
+    - name: Create benchmark files
+      run: |
+        echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/postgres/internal/testconfig/benchmark.json
+        echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/mysql/internal/testconfig/benchmark.json
+        echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/oracle/internal/testconfig/benchmark.json
+        echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/mongodb/internal/testconfig/benchmark.json
+        echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/postgres/internal/testconfig/benchmark_cdc.json
+        echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/mysql/internal/testconfig/benchmark_cdc.json
+        echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/oracle/internal/testconfig/benchmark_cdc.json
+        echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/mongodb/internal/testconfig/benchmark_cdc.json
 
-    # - name: Create source.json from secrets
-    #   run: |
-    #     echo '${{ secrets.POSTGRES_SOURCE_JSON }}' | base64 --decode > ./drivers/postgres/internal/testconfig/source.json
-    #     echo '${{ secrets.MYSQL_SOURCE_JSON }}' | base64 --decode > ./drivers/mysql/internal/testconfig/source.json
-    #     echo '${{ secrets.ORACLE_SOURCE_JSON }}' | base64 --decode > ./drivers/oracle/internal/testconfig/source.json
-    #     echo '${{ secrets.MONGODB_SOURCE_JSON }}' | base64 --decode > ./drivers/mongodb/internal/testconfig/source.json
-
-    # - name: Create destination.json from secrets
-    #   run: |
-    #     echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/postgres/internal/testconfig/destination.json
-    #     echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/mysql/internal/testconfig/destination.json
-    #     echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/oracle/internal/testconfig/destination.json
-    #     echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/mongodb/internal/testconfig/destination.json
-
-    # - name: Create benchmark files
-    #   run: |
-    #     echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/postgres/internal/testconfig/benchmark.json
-    #     echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/mysql/internal/testconfig/benchmark.json
-    #     echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/oracle/internal/testconfig/benchmark.json
-    #     echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/mongodb/internal/testconfig/benchmark.json
-    #     echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/postgres/internal/testconfig/benchmark_cdc.json
-    #     echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/mysql/internal/testconfig/benchmark_cdc.json
-    #     echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/oracle/internal/testconfig/benchmark_cdc.json
-    #     echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/mongodb/internal/testconfig/benchmark_cdc.json
-
-    # - name: Run Performance Tests
-    #   run: |
-    #     go test -v ./drivers/mysql/internal/... -timeout 0 -run 'Performance'
+    - name: Run Performance Tests
+      run: |
+        go test -v ./drivers/mysql/internal/... -timeout 0 -run 'Performance'
 
     - name: Cleanup
       if: always()
