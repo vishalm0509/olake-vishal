@@ -12,6 +12,7 @@ import (
 )
 
 func TestPostgresPerformance(t *testing.T) {
+	t.Parallel()
 	config := testutils.PerformanceTestConfig{
 		TestConfig:      testutils.GetTestConfig("postgres"),
 		Namespace:       "public",

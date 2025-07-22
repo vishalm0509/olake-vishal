@@ -12,6 +12,7 @@ import (
 )
 
 func TestMongodbPerformance(t *testing.T) {
+	t.Parallel()
 	config := testutils.PerformanceTestConfig{
 		TestConfig:      testutils.GetTestConfig("mongodb"),
 		Namespace:       "schitiz_test",

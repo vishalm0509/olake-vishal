@@ -10,6 +10,7 @@ import (
 )
 
 func TestOraclePerformance(t *testing.T) {
+	t.Parallel()
 	config := testutils.PerformanceTestConfig{
 		TestConfig:      testutils.GetTestConfig("oracle"),
 		Namespace:       "ADMIN",

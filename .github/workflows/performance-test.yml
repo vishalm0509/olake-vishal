@@ -18,20 +18,6 @@ on:
 jobs:
   performance-tests:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        driver: [ postgres, oracle, mongodb, mysql ]
-        include:
-        - driver: mysql
-          test_name: TestMySQLPerformance
-        - driver: postgres
-          test_name: TestPostgresPerformance
-        - driver: oracle
-          test_name: TestOraclePerformance
-        - driver: mongodb
-          test_name: TestMongodbPerformance
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -64,12 +50,6 @@ jobs:
           [ $i -eq 30 ] && { echo "❌ VPN timeout"; sudo cat /var/log/openvpn-client.log; exit 1; }
           sleep 2
         done
-        echo "Adding manual route for private network..."
-        sudo ip route add 10.8.0.0/16 dev tun0
-
-        echo "--- Current IP Routes ---"
-        ip route
-        echo "-------------------------"
         echo "✅ VPN setup complete - interface established"
 
     - name: Install Go Dependencies
@@ -97,33 +77,39 @@ jobs:
 
     - name: Create testconfig directories
       run: |
-        mkdir -p ./drivers/${{ matrix.driver }}/internal/testconfig
+        mkdir -p ./drivers/postgres/internal/testconfig
+        mkdir -p ./drivers/mysql/internal/testconfig
+        mkdir -p ./drivers/oracle/internal/testconfig
+        mkdir -p ./drivers/mongodb/internal/testconfig
 
     - name: Create source.json from secrets
       run: |
-        if [ "${{ matrix.driver }}" = "mongodb" ]; then
-          echo '${{ secrets.MONGODB_SOURCE_JSON }}' | base64 --decode > ./drivers/mongodb/internal/testconfig/source.json
-        elif [ "${{ matrix.driver }}" = "postgres" ]; then
-          echo '${{ secrets.POSTGRES_SOURCE_JSON }}' | base64 --decode > ./drivers/postgres/internal/testconfig/source.json
-        elif [ "${{ matrix.driver }}" = "oracle" ]; then
-          echo '${{ secrets.ORACLE_SOURCE_JSON }}' | base64 --decode > ./drivers/oracle/internal/testconfig/source.json
-        elif [ "${{ matrix.driver }}" = "mysql" ]; then
-          echo '${{ secrets.MYSQL_SOURCE_JSON }}' | base64 --decode > ./drivers/mysql/internal/testconfig/source.json
-        fi
+        echo '${{ secrets.POSTGRES_SOURCE_JSON }}' | base64 --decode > ./drivers/postgres/internal/testconfig/source.json
+        echo '${{ secrets.MYSQL_SOURCE_JSON }}' | base64 --decode > ./drivers/mysql/internal/testconfig/source.json
+        echo '${{ secrets.ORACLE_SOURCE_JSON }}' | base64 --decode > ./drivers/oracle/internal/testconfig/source.json
+        echo '${{ secrets.MONGODB_SOURCE_JSON }}' | base64 --decode > ./drivers/mongodb/internal/testconfig/source.json
 
     - name: Create destination.json from secrets
       run: |
-        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/${{ matrix.driver }}/internal/testconfig/destination.json
+        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/postgres/internal/testconfig/destination.json
+        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/mysql/internal/testconfig/destination.json
+        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/oracle/internal/testconfig/destination.json
+        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/mongodb/internal/testconfig/destination.json
 
     - name: Create benchmark files
       run: |
-        echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/${{ matrix.driver }}/internal/testconfig/benchmark.json
-        echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/${{ matrix.driver }}/internal/testconfig/benchmark_cdc.json
+        echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/postgres/internal/testconfig/benchmark.json
+        echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/mysql/internal/testconfig/benchmark.json
+        echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/oracle/internal/testconfig/benchmark.json
+        echo '${{ secrets.BENCHMARK_JSON }}' > ./drivers/mongodb/internal/testconfig/benchmark.json
+        echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/postgres/internal/testconfig/benchmark_cdc.json
+        echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/mysql/internal/testconfig/benchmark_cdc.json
+        echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/oracle/internal/testconfig/benchmark_cdc.json
+        echo '${{ secrets.BENCHMARK_CDC_JSON }}' > ./drivers/mongodb/internal/testconfig/benchmark_cdc.json
 
-    - name: Run Performance Test for ${{ matrix.driver }}
+    - name: Run Performance Tests
       run: |
-        cd ./drivers/${{ matrix.driver }}/internal
-        go test -v -timeout 24h -run ${{ matrix.test_name }}
+        go test -v -p 3 ./drivers/oracle/internal/... ./drivers/mongodb/internal/... ./drivers/mysql/internal/... -timeout 0 -run 'Performance'
 
     - name: Cleanup
       if: always()

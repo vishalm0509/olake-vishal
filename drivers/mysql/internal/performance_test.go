@@ -11,6 +11,7 @@ import (
 )
 
 func TestMySQLPerformance(t *testing.T) {
+	t.Parallel()
 	config := testutils.PerformanceTestConfig{
 		TestConfig:      testutils.GetTestConfig("mysql"),
 		Namespace:       "performance",
