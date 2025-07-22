@@ -51,14 +51,8 @@ jobs:
           [ $i -eq 30 ] && { echo "❌ VPN timeout"; sudo cat /var/log/openvpn-client.log; exit 1; }
           sleep 2
         done
-        # --- CORRECTED LOCATION: Configure DNS only AFTER tun0 exists ---
-        echo "Configuring split DNS for the tun0 interface..."
         sudo resolvectl dns tun0 10.8.0.1
         sudo resolvectl domain tun0 ~private.postgres.database.azure.com
-        echo "--- Current IP Routes ---"
-        ip route
-        echo "-------------------------"
-        echo "✅ VPN setup complete - interface established"
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -97,7 +91,7 @@ jobs:
         echo '${{ secrets.POSTGRES_DESTINATION_JSON }}' | base64 --decode > ./drivers/postgres/internal/testconfig/destination.json
         echo '${{ secrets.MYSQL_DESTINATION_JSON }}' | base64 --decode > ./drivers/mysql/internal/testconfig/destination.json
         echo '${{ secrets.ORACLE_DESTINATION_JSON }}' | base64 --decode > ./drivers/oracle/internal/testconfig/destination.json
-        echo '${{ secrets.MONGO_DESTINATION_JSON }}' | base64 --decode > ./drivers/mongodb/internal/testconfig/destination.json
+        echo '${{ secrets.MONGODB_DESTINATION_JSON }}' | base64 --decode > ./drivers/mongodb/internal/testconfig/destination.json
 
     - name: Create benchmark files
       run: |
