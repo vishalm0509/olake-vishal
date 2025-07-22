@@ -147,6 +147,9 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 			ConfigModifier: func(c *container.Config) {
 				c.WorkingDir = "/test-olake"
 			},
+			Env: map[string]string{
+				"TELEMETRY_DISABLED": "true",
+			},
 			LifecycleHooks: []testcontainers.ContainerLifecycleHooks{
 				{
 					PostReadies: []testcontainers.ContainerHook{
