@@ -44,6 +44,8 @@ jobs:
         sudo chmod 600 /etc/openvpn/client/client.ovpn /etc/openvpn/client/auth.txt
         sudo chown root:root /etc/openvpn/client/client.ovpn /etc/openvpn/client/auth.txt
         sudo openvpn --config /etc/openvpn/client/client.ovpn --daemon ovpn-client --log /var/log/openvpn-client.log --verb 3
+        sudo resolvectl dns tun0 10.8.0.1
+        sudo resolvectl domain tun0 ~private.postgres.database.azure.com
         echo "Establishing VPN connection..."
         for i in {1..30}; do
           if ip addr show | grep -q "tun0\|tap0"; then echo "✅ VPN connected"; break; fi
@@ -113,6 +115,7 @@ jobs:
     - name: Run Performance Tests
       run: |
         go test -v -p 2 ./drivers/mysql/internal/...  ./drivers/mongodb/internal/... -timeout 0 -run 'Performance'
+        go test -v -p 2 ./drivers/oracle/internal/...  ./drivers/postgres/internal/... -timeout 0 -run 'Performance'
 
     - name: Cleanup
       if: always()
