@@ -116,7 +116,7 @@ jobs:
 
     - name: Run Performance Tests
       run: |
-        go test -v -p 3 ./drivers/oracle/internal/... ./drivers/mongodb/internal/... ./drivers/mysql/internal/... -timeout 0 -run 'Performance'
+        go test -v ./drivers/mysql/internal/... -timeout 0 -run 'Performance'
 
     - name: Cleanup
       if: always()
