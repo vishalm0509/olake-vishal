@@ -37,7 +37,7 @@ jobs:
       run: |
         # Install, configure, and connect in one step
         set -eo pipefail
-        sudo apt-get update -qq && sudo apt-get install -y openvpn iproute2 iputils-ping netcat-openbsd
+        sudo apt-get update -qq && sudo apt-get install -y openvpn iproute2 iputils-ping netcat-openbsd telnet
         sudo mkdir -p /etc/openvpn/client && sudo chmod 700 /etc/openvpn/client
         echo "${{ secrets.OPENVPN_CONFIG }}" | base64 --decode | sudo tee /etc/openvpn/client/client.ovpn > /dev/null
         echo "${{ secrets.OPENVPN_USERNAME }}" | sudo tee /etc/openvpn/client/auth.txt > /dev/null
@@ -63,17 +63,17 @@ jobs:
       run: |
         echo "--- Testing TCP connection from Host to MySQL ---"
         # nc -z (zero-I/O mode) -v (verbose) -w 10 (timeout 10s)
-        nc -zv -w 10 172.31.32.11 3307
+        telnet 172.31.32.11 3307
         echo "--- Testing TCP connection from Host to Oracle ---"
-        nc -zv -w 10 dz-stag-oracle-rds.ct8oam0wodxr.ap-south-1.rds.amazonaws.com 1521
+        telnet dz-stag-oracle-rds.ct8oam0wodxr.ap-south-1.rds.amazonaws.com 1521
         echo "--- Testing TCP connection from Host to MongoDB ---"
-        nc -zv -w 10 172.31.16.5 27017
+        telnet 172.31.16.5 27017
 
     - name: 2. Test Connection from Basic Docker Container
       run: |
-        echo "--- Testing TCP connection from Container to MySQL ---"
+        echo "--- Testing TCP connection from Container to MySQL ---" realworld/telnet:latest
         # --rm (cleans up) --network host (the key setting)
-        docker run --rm --network host nicolaka/netshoot nc -zv -w 10 172.31.32.11 3307
+        docker run --rm --network host str0ke/telnet:latest 172.31.32.11 3307
 
     # - name: Install Go Dependencies
     #   run: go mod download
