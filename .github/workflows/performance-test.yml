@@ -111,10 +111,10 @@ jobs:
 
     - name: Create destination.json from secrets
       run: |
-        # echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/postgres/internal/testconfig/destination.json
+        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/postgres/internal/testconfig/destination.json
         echo '${{ secrets.MYSQL_DESTINATION_JSON }}' > ./drivers/mysql/internal/testconfig/destination.json
-        # echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/oracle/internal/testconfig/destination.json
-        # echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/mongodb/internal/testconfig/destination.json
+        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/oracle/internal/testconfig/destination.json
+        echo '${{ secrets.DESTINATION_JSON }}' > ./drivers/mongodb/internal/testconfig/destination.json
 
     - name: Create benchmark files
       run: |
@@ -130,17 +130,12 @@ jobs:
     - name: Run Performance Tests
       run: |
         go test -v ./drivers/mysql/internal/... -timeout 0 -run 'Performance'
-        # go test -v -p 2 ./drivers/mysql/internal/...  ./drivers/mongodb/internal/... -timeout 0 -run 'Performance'
-        # go test -v -p 2 ./drivers/oracle/internal/...  ./drivers/postgres/internal/... -timeout 0 -run 'Performance'
 
     - name: Cleanup
       if: always()
       run: |
         # Drop database from catalog
         aws glue delete-database --name performance_mysql || echo "failed to delete database"
-        # aws glue delete-database --name performance_postgres || echo "failed to delete database"
-        # aws glue delete-database --name performance_oracle || echo "failed to delete database"
-        # aws glue delete-database --name performance_mongodb || echo "failed to delete database"
         echo "Catalog cleanup completed"
 
         # VPN Cleanup
