@@ -44,14 +44,16 @@ jobs:
         sudo chmod 600 /etc/openvpn/client/client.ovpn /etc/openvpn/client/auth.txt
         sudo chown root:root /etc/openvpn/client/client.ovpn /etc/openvpn/client/auth.txt
         sudo openvpn --config /etc/openvpn/client/client.ovpn --daemon ovpn-client --log /var/log/openvpn-client.log --verb 3
-        sudo resolvectl dns tun0 10.8.0.1
-        sudo resolvectl domain tun0 ~private.postgres.database.azure.com
         echo "Establishing VPN connection..."
         for i in {1..30}; do
           if ip addr show | grep -q "tun0\|tap0"; then echo "✅ VPN connected"; break; fi
           [ $i -eq 30 ] && { echo "❌ VPN timeout"; sudo cat /var/log/openvpn-client.log; exit 1; }
           sleep 2
         done
+        # --- CORRECTED LOCATION: Configure DNS only AFTER tun0 exists ---
+        echo "Configuring split DNS for the tun0 interface..."
+        sudo resolvectl dns tun0 10.8.0.1
+        sudo resolvectl domain tun0 ~private.postgres.database.azure.com
         echo "--- Current IP Routes ---"
         ip route
         echo "-------------------------"
