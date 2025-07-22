@@ -50,13 +50,6 @@ jobs:
           [ $i -eq 30 ] && { echo "❌ VPN timeout"; sudo cat /var/log/openvpn-client.log; exit 1; }
           sleep 2
         done
-
-        cat /etc/resolv.conf
-        echo "Forcing DNS to use VPN resolver..."
-        # This command overwrites the file with only your nameserver
-        echo -e "nameserver 10.8.0.1\nnameserver 8.8.8.8" | sudo tee /etc/resolv.conf
-        cat /etc/resolv.conf
-
         echo "--- Current IP Routes ---"
         ip route
         echo "-------------------------"
