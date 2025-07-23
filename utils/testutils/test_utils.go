@@ -3,7 +3,6 @@ package testutils
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -103,50 +102,42 @@ func InstallCmd() string {
 func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 	ctx := context.Background()
 
-	awsSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
-	awsAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
-	awsSessionToken := os.Getenv("AWS_SESSION_TOKEN")
-
-	if awsSecretKey == "" || awsAccessKey == "" || awsSessionToken == "" {
-		t.Error("AWS credentials are not set")
+	discoverCommand := func(config TestConfig) string {
+		return fmt.Sprintf("/test-olake/build.sh driver-%s discover --config %s", config.Driver, config.SourcePath)
 	}
 
-	// discoverCommand := func(config TestConfig) string {
-	// 	return fmt.Sprintf("/test-olake/build.sh driver-%s discover --config %s", config.Driver, config.SourcePath)
-	// }
+	syncCommand := func(config TestConfig, isBackfill bool) string {
+		return fmt.Sprintf("/test-olake/build.sh driver-%s sync --config %s --catalog %s --destination %s %s", config.Driver, config.SourcePath, config.CatalogPath, config.DestinationPath, utils.Ternary(isBackfill, "", fmt.Sprintf("--state %s", config.StatePath)).(string))
+	}
 
-	// syncCommand := func(config TestConfig, isBackfill bool) string {
-	// 	return fmt.Sprintf("/test-olake/build.sh driver-%s sync --config %s --catalog %s --destination %s %s", config.Driver, config.SourcePath, config.CatalogPath, config.DestinationPath, utils.Ternary(isBackfill, "", fmt.Sprintf("--state %s", config.StatePath)).(string))
-	// }
+	updateStreamsCommand := func(config TestConfig, namespace string, streams ...string) string {
+		if len(streams) == 0 {
+			return ""
+		}
 
-	// updateStreamsCommand := func(config TestConfig, namespace string, streams ...string) string {
-	// 	if len(streams) == 0 {
-	// 		return ""
-	// 	}
+		var conditions string
+		for i, stream := range streams {
+			if i > 0 {
+				conditions += " or "
+			}
+			conditions += fmt.Sprintf(`.stream_name == "%s"`, stream)
+		}
 
-	// 	var conditions string
-	// 	for i, stream := range streams {
-	// 		if i > 0 {
-	// 			conditions += " or "
-	// 		}
-	// 		conditions += fmt.Sprintf(`.stream_name == "%s"`, stream)
-	// 	}
+		jqExpr := fmt.Sprintf(
+			`jq '.selected_streams = { "%s": (.selected_streams["%s"] | map(select(%s) | .normalization = true)) }' %s > /tmp/streams.json && mv /tmp/streams.json %s`,
+			namespace,
+			namespace,
+			conditions,
+			config.CatalogPath,
+			config.CatalogPath,
+		)
 
-	// 	jqExpr := fmt.Sprintf(
-	// 		`jq '.selected_streams = { "%s": (.selected_streams["%s"] | map(select(%s) | .normalization = true)) }' %s > /tmp/streams.json && mv /tmp/streams.json %s`,
-	// 		namespace,
-	// 		namespace,
-	// 		conditions,
-	// 		config.CatalogPath,
-	// 		config.CatalogPath,
-	// 	)
-
-	// 	return jqExpr
-	// }
+		return jqExpr
+	}
 
 	t.Run("performance", func(t *testing.T) {
 		req := testcontainers.ContainerRequest{
-			Image: "amazon/aws-cli",
+			Image: "golang:1.23.2",
 			HostConfigModifier: func(hc *container.HostConfig) {
 				hc.Binds = []string{
 					fmt.Sprintf("%s:/test-olake:rw", config.TestConfig.HostRoot),
@@ -158,81 +149,76 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 				c.WorkingDir = "/test-olake"
 			},
 			Env: map[string]string{
-				"TELEMETRY_DISABLED":    "true",
-				"AWS_SECRET_ACCESS_KEY": awsSecretKey,
-				"AWS_ACCESS_KEY_ID":     awsAccessKey,
-				"AWS_SESSION_TOKEN":     awsSessionToken,
+				"TELEMETRY_DISABLED": "true",
 			},
 			LifecycleHooks: []testcontainers.ContainerLifecycleHooks{
 				{
 					PostReadies: []testcontainers.ContainerHook{
 						func(ctx context.Context, c testcontainers.Container) error {
-							_, reader, err := c.Exec(ctx, []string{"aws", "sts", "get-caller-identity"})
-							output, _ := io.ReadAll(reader)
+							_, output, err := utils.ExecContainerCmd(ctx, c, InstallCmd())
 							require.NoError(t, err, fmt.Sprintf("Failed to install dependencies:\n%s", string(output)))
+
+							conn, err := config.ConnectDB(ctx)
+							require.NoError(t, err, "Failed to connect to database")
+							defer func() {
+								if err := config.CloseDB(conn); err != nil {
+									t.Logf("warning: failed to close database connection: %v", err)
+								}
+							}()
+
+							t.Log("⚪️", "Starting backfill")
+							discoverCmd := discoverCommand(*config.TestConfig)
+							_, output, err = utils.ExecContainerCmd(ctx, c, discoverCmd)
+							require.NoError(t, err, fmt.Sprintf("Failed to perform discover:\n%s", string(output)))
 							t.Log(string(output))
 
-							// conn, err := config.ConnectDB(ctx)
-							// require.NoError(t, err, "Failed to connect to database")
-							// defer func() {
-							// 	if err := config.CloseDB(conn); err != nil {
-							// 		t.Logf("warning: failed to close database connection: %v", err)
-							// 	}
-							// }()
+							updateStreamsCmd := updateStreamsCommand(*config.TestConfig, config.Namespace, config.BackfillStreams...)
+							_, _, err = utils.ExecContainerCmd(ctx, c, updateStreamsCmd)
+							require.NoError(t, err, "Failed to update streams")
 
-							// t.Log("⚪️", "Starting backfill")
-							// discoverCmd := discoverCommand(*config.TestConfig)
-							// _, output, err = utils.ExecContainerCmd(ctx, c, discoverCmd)
-							// require.NoError(t, err, fmt.Sprintf("Failed to perform discover:\n%s", string(output)))
-							// t.Log(string(output))
+							syncCmd := syncCommand(*config.TestConfig, true)
+							_, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
+							require.NoError(t, err, fmt.Sprintf("Failed to perform sync:\n%s", string(output)))
+							t.Log(string(output))
 
-							// updateStreamsCmd := updateStreamsCommand(*config.TestConfig, config.Namespace, config.BackfillStreams...)
-							// _, _, err = utils.ExecContainerCmd(ctx, c, updateStreamsCmd)
-							// require.NoError(t, err, "Failed to update streams")
+							success, err := IsRPSAboveBenchmark(*config.TestConfig, true)
+							require.NoError(t, err, "Failed to check RPS", err)
+							require.True(t, success, fmt.Sprintf("%s backfill performance below benchmark", config.TestConfig.Driver))
+							t.Logf("✅ SUCCESS: %s backfill", config.TestConfig.Driver)
 
-							// syncCmd := syncCommand(*config.TestConfig, true)
-							// _, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
-							// require.NoError(t, err, fmt.Sprintf("Failed to perform sync:\n%s", string(output)))
-							// t.Log(string(output))
+							if config.SupportsCDC {
+								t.Log("⚪️", "Starting CDC")
+								err := config.SetupCDC(ctx, conn)
+								require.NoError(t, err, "Failed to setup database for CDC")
 
-							// success, err := IsRPSAboveBenchmark(*config.TestConfig, true)
-							// require.NoError(t, err, "Failed to check RPS", err)
-							// require.True(t, success, fmt.Sprintf("%s backfill performance below benchmark", config.TestConfig.Driver))
-							// t.Logf("✅ SUCCESS: %s backfill", config.TestConfig.Driver)
+								discoverCmd := discoverCommand(*config.TestConfig)
+								_, output, err := utils.ExecContainerCmd(ctx, c, discoverCmd)
+								require.NoError(t, err, fmt.Sprintf("Failed to perform discover:\n%s", string(output)))
+								t.Log(string(output))
 
-							// if config.SupportsCDC {
-							// 	t.Log("⚪️", "Starting CDC")
-							// 	err := config.SetupCDC(ctx, conn)
-							// 	require.NoError(t, err, "Failed to setup database for CDC")
+								updateStreamsCmd := updateStreamsCommand(*config.TestConfig, config.Namespace, config.CDCStreams...)
+								_, _, err = utils.ExecContainerCmd(ctx, c, updateStreamsCmd)
+								require.NoError(t, err, "Failed to update streams")
 
-							// 	discoverCmd := discoverCommand(*config.TestConfig)
-							// 	_, output, err := utils.ExecContainerCmd(ctx, c, discoverCmd)
-							// 	require.NoError(t, err, fmt.Sprintf("Failed to perform discover:\n%s", string(output)))
-							// 	t.Log(string(output))
+								syncCmd := syncCommand(*config.TestConfig, true)
+								_, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
+								require.NoError(t, err, fmt.Sprintf("Failed to perform initial sync:\n%s", string(output)))
+								t.Log(string(output))
 
-							// 	updateStreamsCmd := updateStreamsCommand(*config.TestConfig, config.Namespace, config.CDCStreams...)
-							// 	_, _, err = utils.ExecContainerCmd(ctx, c, updateStreamsCmd)
-							// 	require.NoError(t, err, "Failed to update streams")
+								err = config.TriggerCDC(ctx, conn)
+								require.NoError(t, err, "Failed to trigger CDC change")
 
-							// 	syncCmd := syncCommand(*config.TestConfig, true)
-							// 	_, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
-							// 	require.NoError(t, err, fmt.Sprintf("Failed to perform initial sync:\n%s", string(output)))
-							// 	t.Log(string(output))
+								syncCmd = syncCommand(*config.TestConfig, false)
+								_, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
+								require.NoError(t, err, fmt.Sprintf("Failed to perform CDC sync:\n%s", string(output)))
+								t.Log(string(output))
 
-							// 	err = config.TriggerCDC(ctx, conn)
-							// 	require.NoError(t, err, "Failed to trigger CDC change")
+								success, err := IsRPSAboveBenchmark(*config.TestConfig, false)
+								require.NoError(t, err, "Failed to check RPS", err)
+								require.True(t, success, fmt.Sprintf("%s CDC performance below benchmark", config.TestConfig.Driver))
+								t.Logf("✅ SUCCESS: %s cdc", config.TestConfig.Driver)
 
-							// 	syncCmd = syncCommand(*config.TestConfig, false)
-							// 	_, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
-							// 	require.NoError(t, err, fmt.Sprintf("Failed to perform CDC sync:\n%s", string(output)))
-							// 	t.Log(string(output))
-
-							// 	success, err := IsRPSAboveBenchmark(*config.TestConfig, false)
-							// 	require.NoError(t, err, "Failed to check RPS", err)
-							// 	require.True(t, success, fmt.Sprintf("%s CDC performance below benchmark", config.TestConfig.Driver))
-							// 	t.Logf("✅ SUCCESS: %s cdc", config.TestConfig.Driver)
-
-							// }
+							}
 							return nil
 						},
 					},
