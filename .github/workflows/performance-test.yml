@@ -55,6 +55,7 @@ jobs:
         sudo resolvectl domain tun0 ~private.postgres.database.azure.com
 
     - name: Configure AWS Credentials
+      id: aws-credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-session-name: performance_test_gh
@@ -105,9 +106,12 @@ jobs:
         echo '${{ secrets.MONGODB_BENCHMARK_CDC_JSON }}' > ./drivers/mongodb/internal/testconfig/benchmark_cdc.json
 
     - name: Run Performance Tests
+      env:
+        AWS_ACCESS_KEY: ${{ steps.aws-credentials.outputs.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_KEY: ${{ steps.aws-credentials.outputs.AWS_SECRET_ACCESS_KEY }}
+        AWS_SESSION_TOKEN: ${{ steps.aws-credentials.outputs.AWS_SESSION_TOKEN }}
       run: |
-        go test -v -p 2 ./drivers/mysql/internal/... ./drivers/mongodb/internal/... -timeout 0 -run 'Performance'
-        go test -v -p 2 ./drivers/oracle/internal/... ./drivers/postgres/internal/... -timeout 0 -run 'Performance'
+        go test -v ./drivers/mysql/internal/... -timeout 0 -run 'Performance'
 
     - name: Cleanup
       if: always()

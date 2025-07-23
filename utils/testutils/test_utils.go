@@ -102,6 +102,14 @@ func InstallCmd() string {
 func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 	ctx := context.Background()
 
+	awsSecretKey := os.Getenv("AWS_SECRET_KEY")
+	awsAccessKey := os.Getenv("AWS_ACCESS_KEY")
+	awsSessionToken := os.Getenv("AWS_SESSION_TOKEN")
+
+	if awsSecretKey != "" || awsAccessKey != "" || awsSessionToken != "" {
+		t.Error("AWS credentials are not set")
+	}
+
 	discoverCommand := func(config TestConfig) string {
 		return fmt.Sprintf("/test-olake/build.sh driver-%s discover --config %s", config.Driver, config.SourcePath)
 	}
@@ -124,7 +132,8 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 		}
 
 		jqExpr := fmt.Sprintf(
-			`jq '.selected_streams["%s"] |= map(select(%s) | .normalization = true)' %s > /tmp/streams.json && mv /tmp/streams.json %s`,
+			`jq '.selected_streams = { "%s": (.selected_streams["%s"] | map(select(%s) | .normalization = true)) }' %s > /tmp/streams.json && mv /tmp/streams.json %s`,
+			namespace,
 			namespace,
 			conditions,
 			config.CatalogPath,
@@ -149,6 +158,9 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 			},
 			Env: map[string]string{
 				"TELEMETRY_DISABLED": "true",
+				"AWS_SECRET_KEY":     awsSecretKey,
+				"AWS_ACCESS_KEY":     awsAccessKey,
+				"AWS_SESSION_TOKEN":  awsSessionToken,
 			},
 			LifecycleHooks: []testcontainers.ContainerLifecycleHooks{
 				{
@@ -156,11 +168,9 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 						func(ctx context.Context, c testcontainers.Container) error {
 							_, output, err := utils.ExecContainerCmd(ctx, c, InstallCmd())
 							require.NoError(t, err, fmt.Sprintf("Failed to install dependencies:\n%s", string(output)))
-							t.Log("🟡 Installed dependencies")
 
 							conn, err := config.ConnectDB(ctx)
 							require.NoError(t, err, "Failed to connect to database")
-							t.Log("🟡 Connected to database")
 							defer func() {
 								if err := config.CloseDB(conn); err != nil {
 									t.Logf("warning: failed to close database connection: %v", err)
@@ -172,18 +182,15 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 							_, output, err = utils.ExecContainerCmd(ctx, c, discoverCmd)
 							require.NoError(t, err, fmt.Sprintf("Failed to perform discover:\n%s", string(output)))
 							t.Log(string(output))
-							t.Log("🟡 Discover completed")
 
 							updateStreamsCmd := updateStreamsCommand(*config.TestConfig, config.Namespace, config.BackfillStreams...)
 							_, _, err = utils.ExecContainerCmd(ctx, c, updateStreamsCmd)
 							require.NoError(t, err, "Failed to update streams")
-							t.Log("🟡 Streams updated")
 
 							syncCmd := syncCommand(*config.TestConfig, true)
 							_, output, err = utils.ExecContainerCmd(ctx, c, syncCmd)
 							require.NoError(t, err, fmt.Sprintf("Failed to perform sync:\n%s", string(output)))
 							t.Log(string(output))
-							t.Log("🟡 Sync completed")
 
 							success, err := IsRPSAboveBenchmark(*config.TestConfig, true)
 							require.NoError(t, err, "Failed to check RPS", err)
