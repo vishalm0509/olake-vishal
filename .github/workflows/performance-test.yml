@@ -61,6 +61,7 @@ jobs:
         role-session-name: performance_test_gh
         role-to-assume: ${{ secrets.AWS_GITHUB_ROLE }}
         aws-region: ${{ secrets.AWS_REGION }}
+        output-credentials: true
 
     - name: Install Go Dependencies
       run: go mod download
@@ -107,6 +108,9 @@ jobs:
 
     - name: Run Performance Tests
       run: |
+        AWS_ACCESS_KEY_ID=${{ steps.aws-credentials.outputs.aws-access-key-id }}
+        AWS_SECRET_ACCESS_KEY=${{ steps.aws-credentials.outputs.aws-secret-access-key }}
+        AWS_SESSION_TOKEN=${{ steps.aws-credentials.outputs.aws-session-token }}
         go test -v ./drivers/mysql/internal/... -timeout 0 -run 'Performance'
 
     - name: Cleanup
