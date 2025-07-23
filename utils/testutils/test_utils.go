@@ -102,8 +102,8 @@ func InstallCmd() string {
 func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 	ctx := context.Background()
 
-	awsSecretKey := os.Getenv("AWS_SECRET_KEY")
-	awsAccessKey := os.Getenv("AWS_ACCESS_KEY")
+	awsSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	awsAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
 	awsSessionToken := os.Getenv("AWS_SESSION_TOKEN")
 
 	if awsSecretKey != "" || awsAccessKey != "" || awsSessionToken != "" {
