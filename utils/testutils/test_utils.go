@@ -106,9 +106,7 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 	awsAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
 	awsSessionToken := os.Getenv("AWS_SESSION_TOKEN")
 
-	t.Logf("AWS_ACCESS_KEY_ID: %s", awsAccessKey)
-
-	if awsSecretKey != "" || awsAccessKey != "" || awsSessionToken != "" {
+	if awsSecretKey == "" || awsAccessKey == "" || awsSessionToken == "" {
 		t.Error("AWS credentials are not set")
 	}
 
