@@ -110,38 +110,38 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 		t.Error("AWS credentials are not set")
 	}
 
-	discoverCommand := func(config TestConfig) string {
-		return fmt.Sprintf("/test-olake/build.sh driver-%s discover --config %s", config.Driver, config.SourcePath)
-	}
+	// discoverCommand := func(config TestConfig) string {
+	// 	return fmt.Sprintf("/test-olake/build.sh driver-%s discover --config %s", config.Driver, config.SourcePath)
+	// }
 
-	syncCommand := func(config TestConfig, isBackfill bool) string {
-		return fmt.Sprintf("/test-olake/build.sh driver-%s sync --config %s --catalog %s --destination %s %s", config.Driver, config.SourcePath, config.CatalogPath, config.DestinationPath, utils.Ternary(isBackfill, "", fmt.Sprintf("--state %s", config.StatePath)).(string))
-	}
+	// syncCommand := func(config TestConfig, isBackfill bool) string {
+	// 	return fmt.Sprintf("/test-olake/build.sh driver-%s sync --config %s --catalog %s --destination %s %s", config.Driver, config.SourcePath, config.CatalogPath, config.DestinationPath, utils.Ternary(isBackfill, "", fmt.Sprintf("--state %s", config.StatePath)).(string))
+	// }
 
-	updateStreamsCommand := func(config TestConfig, namespace string, streams ...string) string {
-		if len(streams) == 0 {
-			return ""
-		}
+	// updateStreamsCommand := func(config TestConfig, namespace string, streams ...string) string {
+	// 	if len(streams) == 0 {
+	// 		return ""
+	// 	}
 
-		var conditions string
-		for i, stream := range streams {
-			if i > 0 {
-				conditions += " or "
-			}
-			conditions += fmt.Sprintf(`.stream_name == "%s"`, stream)
-		}
+	// 	var conditions string
+	// 	for i, stream := range streams {
+	// 		if i > 0 {
+	// 			conditions += " or "
+	// 		}
+	// 		conditions += fmt.Sprintf(`.stream_name == "%s"`, stream)
+	// 	}
 
-		jqExpr := fmt.Sprintf(
-			`jq '.selected_streams = { "%s": (.selected_streams["%s"] | map(select(%s) | .normalization = true)) }' %s > /tmp/streams.json && mv /tmp/streams.json %s`,
-			namespace,
-			namespace,
-			conditions,
-			config.CatalogPath,
-			config.CatalogPath,
-		)
+	// 	jqExpr := fmt.Sprintf(
+	// 		`jq '.selected_streams = { "%s": (.selected_streams["%s"] | map(select(%s) | .normalization = true)) }' %s > /tmp/streams.json && mv /tmp/streams.json %s`,
+	// 		namespace,
+	// 		namespace,
+	// 		conditions,
+	// 		config.CatalogPath,
+	// 		config.CatalogPath,
+	// 	)
 
-		return jqExpr
-	}
+	// 	return jqExpr
+	// }
 
 	t.Run("performance", func(t *testing.T) {
 		req := testcontainers.ContainerRequest{
