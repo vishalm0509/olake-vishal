@@ -157,10 +157,10 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 				c.WorkingDir = "/test-olake"
 			},
 			Env: map[string]string{
-				"TELEMETRY_DISABLED": "true",
-				"AWS_SECRET_KEY":     awsSecretKey,
-				"AWS_ACCESS_KEY":     awsAccessKey,
-				"AWS_SESSION_TOKEN":  awsSessionToken,
+				"TELEMETRY_DISABLED":    "true",
+				"AWS_SECRET_ACCESS_KEY": awsSecretKey,
+				"AWS_ACCESS_KEY_ID":     awsAccessKey,
+				"AWS_SESSION_TOKEN":     awsSessionToken,
 			},
 			LifecycleHooks: []testcontainers.ContainerLifecycleHooks{
 				{
