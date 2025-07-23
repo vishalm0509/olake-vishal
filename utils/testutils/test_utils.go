@@ -167,7 +167,7 @@ func RunPerformanceTest(t *testing.T, config PerformanceTestConfig) {
 				{
 					PostReadies: []testcontainers.ContainerHook{
 						func(ctx context.Context, c testcontainers.Container) error {
-							_, reader, err := c.Exec(ctx, []string{"sts", "get-caller-identity"})
+							_, reader, err := c.Exec(ctx, []string{"aws", "sts", "get-caller-identity"})
 							output, _ := io.ReadAll(reader)
 							require.NoError(t, err, fmt.Sprintf("Failed to install dependencies:\n%s", string(output)))
 							t.Log(string(output))
