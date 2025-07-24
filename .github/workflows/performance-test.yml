@@ -57,7 +57,6 @@ jobs:
         sudo apt-get update -qq && sudo apt-get install -y openvpn iproute2 iputils-ping netcat-openbsd telnet
         sudo mkdir -p /etc/openvpn/client && sudo chmod 700 /etc/openvpn/client
         echo "${{ secrets[format('{0}_OPENVPN_CONFIG', matrix.driver_upper)] }}" | base64 --decode | sudo tee /etc/openvpn/client/client.ovpn > /dev/null
-        echo "${{ secrets.OPENVPN_USERNAME }}" | sudo tee /etc/openvpn/client/auth.txt > /dev/null
         sudo chmod 600 /etc/openvpn/client/client.ovpn /etc/openvpn/client/auth.txt
         sudo chown root:root /etc/openvpn/client/client.ovpn /etc/openvpn/client/auth.txt
         sudo openvpn --config /etc/openvpn/client/client.ovpn --daemon ovpn-client --log /var/log/openvpn-client.log --verb 3
