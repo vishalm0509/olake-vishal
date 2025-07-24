@@ -268,12 +268,12 @@ func ExecuteQueryPerformance(ctx context.Context, t *testing.T, op string) {
 
 	switch op {
 	case "setup_cdc":
-		_, err := db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS test_cdc (id INT PRIMARY KEY, name VARCHAR(255))")
+		_, err := db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS users_cdc (id INT PRIMARY KEY, name VARCHAR(255))")
 		require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", op))
-		_, err = db.ExecContext(ctx, "TRUNCATE TABLE test_cdc")
+		_, err = db.ExecContext(ctx, "TRUNCATE TABLE users_cdc")
 		require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", op))
 	case "trigger_cdc":
-		_, err := db.ExecContext(ctx, "INSERT INTO test_cdc SELECT * FROM test")
+		_, err := db.ExecContext(ctx, "INSERT INTO users_cdc SELECT * FROM users")
 		require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", op))
 	default:
 		t.Fatalf("unknown operation: %s", op)

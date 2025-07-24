@@ -9,9 +9,9 @@ import (
 func TestMySQLPerformance(t *testing.T) {
 	config := &testutils.PerformanceTest{
 		TestConfig:     testutils.GetTestConfig("mysql"),
-		Namespace:      "mysql",
-		BackfillStream: "test",
-		CDCStream:      "test_cdc",
+		Namespace:      "performance",
+		BackfillStream: "users",
+		CDCStream:      "users_cdc",
 		ExecuteQuery:   ExecuteQueryPerformance,
 		SupportsCDC:    true,
 	}
