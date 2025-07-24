@@ -9,9 +9,6 @@ on:
   pull_request:
     branches:
     - "*"
-    paths:
-    - '**/*.go'
-    - '**/*.java'
 permissions:
   id-token: write
   contents: read
