@@ -101,6 +101,11 @@ jobs:
         echo '${{ secrets[format('{0}_BENCHMARK_JSON', matrix.driver_upper)] }}' > ./drivers/${{ matrix.driver }}/internal/testconfig/benchmark.json
         echo '${{ secrets[format('{0}_BENCHMARK_CDC_JSON', matrix.driver_upper)] }}' > ./drivers/${{ matrix.driver }}/internal/testconfig/benchmark_cdc.json
 
+    - name: Create State files
+      if: matrix.driver == 'mysql'
+      run: |
+        echo '${{ secrets.MYSQL_STATE_JSON }}' > ./drivers/mysql/internal/testconfig/state.json
+
     - name: Run Performance Tests
       run: go test -v ./drivers/${{ matrix.driver }}/internal/... -timeout 0 -run 'Performance'
 
