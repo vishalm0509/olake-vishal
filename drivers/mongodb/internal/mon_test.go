@@ -9,7 +9,7 @@ import (
 func TestMongodbPerformance(t *testing.T) {
 	config := &testutils.PerformanceTest{
 		TestConfig:          testutils.GetTestConfig("mongodb"),
-		Namespace:           "test",
+		Namespace:           "schitiz_test",
 		BackfillStreams:     []string{"users"},
 		CDCStreams:          []string{"users_cdc"},
 		ExecuteQuery:        ExecuteQueryPerformance,
