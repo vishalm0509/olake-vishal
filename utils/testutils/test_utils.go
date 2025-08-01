@@ -407,7 +407,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 
 		t.Logf("CurrentRPS: %.2f, BenchmarkRPS: %.2f\n", rps, benchmarkRps)
 
-		if rps < 0*benchmarkRps {
+		if rps < 0.9*benchmarkRps {
 			return false, fmt.Errorf("❌ RPS is less than benchmark RPS")
 		}
 
@@ -496,31 +496,22 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 				{
 					PostReadies: []testcontainers.ContainerHook{
 						func(ctx context.Context, c testcontainers.Container) error {
-
-							if code, _, err := utils.ExecCommand(ctx, c, installCmd); err != nil || code != 0 {
-								return fmt.Errorf("failed to install dependencies: %s", err)
-							}
+							_, output, err := utils.ExecCommand(ctx, c, installCmd)
+							require.NoError(t, err, fmt.Sprintf("Failed to install dependencies:\n%s", string(output)))
 
 							discoverCmd := discoverCommand(*cfg.TestConfig)
-							if code, output, err := utils.ExecCommand(ctx, c, discoverCmd); err != nil || code != 0 {
-								t.Logf("backfill: discover failed: %s", string(output))
-								return fmt.Errorf("failed to perform discover: %s", err)
-							}
-							t.Log("backfill: discover successful")
+							_, output, err = utils.ExecCommand(ctx, c, discoverCmd)
+							require.NoError(t, err, fmt.Sprintf("Failed to perform discover:\n%s", string(output)))
+							t.Log(string(output))
 
 							updateStreamsCmd := updateStreamsCommand(*cfg.TestConfig, cfg.Namespace, cfg.BackfillStreams, true)
-							if code, output, err := utils.ExecCommand(ctx, c, updateStreamsCmd); err != nil || code != 0 {
-								t.Logf("backfill: update streams failed: %s", string(output))
-								return fmt.Errorf("failed to update streams: %s", err)
-							}
-							t.Log("backfill: update streams successful")
+							_, _, err = utils.ExecCommand(ctx, c, updateStreamsCmd)
+							require.NoError(t, err, "Failed to update streams")
 
 							syncCmd := syncCommand(*cfg.TestConfig, true, cfg.UsesPreChunkedState)
-							if output, err := syncWithTimeout(ctx, c, syncCmd); err != nil {
-								t.Logf("backfill: sync failed: %s", string(output))
-								return fmt.Errorf("failed to perform sync: %s", err)
-							}
-							t.Log("backfill: sync successful")
+							output, err = syncWithTimeout(ctx, c, syncCmd)
+							require.NoError(t, err, fmt.Sprintf("Failed to perform sync:\n%s", string(output)))
+							t.Log(string(output))
 
 							checkRPS, err := isRPSAboveBenchmark(*cfg.TestConfig, true)
 							require.NoError(t, err, "Failed to check RPS", err)
@@ -531,34 +522,25 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 								cfg.ExecuteQuery(ctx, t, "setup_cdc", cfg.BackfillStreams)
 
 								discoverCmd := discoverCommand(*cfg.TestConfig)
-								if code, output, err := utils.ExecCommand(ctx, c, discoverCmd); err != nil || code != 0 {
-									t.Logf("cdc: discover failed: %s", string(output))
-									return fmt.Errorf("failed to perform discover: %s", err)
-								}
-								t.Log("cdc: discover successful")
+								_, output, err := utils.ExecCommand(ctx, c, discoverCmd)
+								require.NoError(t, err, fmt.Sprintf("Failed to perform discover:\n%s", string(output)))
+								t.Log(string(output))
 
 								updateStreamsCmd := updateStreamsCommand(*cfg.TestConfig, cfg.Namespace, cfg.CDCStreams, false)
-								if code, output, err := utils.ExecCommand(ctx, c, updateStreamsCmd); err != nil || code != 0 {
-									t.Logf("cdc: update streams failed: %s", string(output))
-									return fmt.Errorf("failed to update streams: %s", err)
-								}
-								t.Log("cdc: update streams successful")
+								_, _, err = utils.ExecCommand(ctx, c, updateStreamsCmd)
+								require.NoError(t, err, "Failed to update streams")
 
 								syncCmd := syncCommand(*cfg.TestConfig, true, false)
-								if output, err := syncWithTimeout(ctx, c, syncCmd); err != nil {
-									t.Logf("cdc: initial sync failed: %s", string(output))
-									return fmt.Errorf("failed to perform initial sync: %s", err)
-								}
-								t.Log("cdc: initial sync successful")
+								_, output, err = utils.ExecCommand(ctx, c, syncCmd)
+								require.NoError(t, err, fmt.Sprintf("Failed to perform initial sync:\n%s", string(output)))
+								t.Log(string(output))
 
 								cfg.ExecuteQuery(ctx, t, "trigger_cdc", cfg.BackfillStreams)
 
 								syncCmd = syncCommand(*cfg.TestConfig, false, false)
-								if output, err := syncWithTimeout(ctx, c, syncCmd); err != nil {
-									t.Logf("cdc: sync failed: %s", string(output))
-									return fmt.Errorf("failed to perform sync: %s", err)
-								}
-								t.Log("cdc: sync successful")
+								output, err = syncWithTimeout(ctx, c, syncCmd)
+								require.NoError(t, err, fmt.Sprintf("Failed to perform CDC sync:\n%s", string(output)))
+								t.Log(string(output))
 
 								checkRPS, err := isRPSAboveBenchmark(*cfg.TestConfig, false)
 								require.NoError(t, err, "Failed to check RPS", err)
