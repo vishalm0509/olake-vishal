@@ -465,12 +465,12 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 	syncWithTimeout := func(ctx context.Context, c testcontainers.Container, cmd string) ([]byte, error) {
 		timedCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 		defer cancel()
-		_, output, err := utils.ExecCommand(timedCtx, c, cmd)
+		code, output, err := utils.ExecCommand(timedCtx, c, cmd)
 		// check if sync was cancelled due to timeout (expected)
 		if timedCtx.Err() == context.DeadlineExceeded {
 			return output, nil
 		}
-		if err != nil {
+		if err != nil || code != 0 {
 			return output, err
 		}
 		return output, nil
