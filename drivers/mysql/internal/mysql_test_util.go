@@ -255,7 +255,7 @@ var MySQLToIcebergSchema = map[string]string{
 }
 
 // ExecuteQueryPerformance executes MySQL queries for performance testing based on the operation type
-func ExecuteQueryPerformance(ctx context.Context, t *testing.T, op string) {
+func ExecuteQueryPerformance(ctx context.Context, t *testing.T, op string, backfillStreams []string) {
 	t.Helper()
 
 	var cfg MySQL
@@ -268,13 +268,21 @@ func ExecuteQueryPerformance(ctx context.Context, t *testing.T, op string) {
 
 	switch op {
 	case "setup_cdc":
-		_, err := db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS users_cdc (id INT PRIMARY KEY, name VARCHAR(255))")
-		require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", op))
-		_, err = db.ExecContext(ctx, "TRUNCATE TABLE users_cdc")
-		require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", op))
+		// truncate the cdc tables
+		for _, stream := range backfillStreams {
+			_, err := db.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s_cdc", stream))
+			require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", op), err)
+		}
+
 	case "trigger_cdc":
-		_, err := db.ExecContext(ctx, "INSERT INTO users_cdc SELECT * FROM users")
-		require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", op))
+		// insert the data into the cdc tables concurrently
+		err := utils.Concurrent(ctx, backfillStreams, 2, func(ctx context.Context, stream string, executionNumber int) error {
+			// TODO: change to 10M
+			_, err := db.ExecContext(ctx, fmt.Sprintf("INSERT INTO %s_cdc SELECT * FROM %s LIMIT 500000", stream, stream))
+			return err
+		})
+		require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", op), err)
+
 	default:
 		t.Fatalf("unknown operation: %s", op)
 	}
