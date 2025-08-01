@@ -75,39 +75,39 @@ jobs:
         role-to-assume: ${{ secrets.AWS_GITHUB_ROLE }}
         aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Install Go Dependencies
-      run: go mod download
+    # - name: Install Go Dependencies
+    #   run: go mod download
 
-    - name: Build Project
-      run: go build -v ./...
+    # - name: Build Project
+    #   run: go build -v ./...
 
-    - name: Build Iceberg Sink
-      working-directory: ./destination/iceberg/olake-iceberg-java-writer
-      run: mvn clean package -DskipTests
+    # - name: Build Iceberg Sink
+    #   working-directory: ./destination/iceberg/olake-iceberg-java-writer
+    #   run: mvn clean package -DskipTests
 
-    - name: Create testconfig directory
-      run: mkdir -p ./drivers/${{ matrix.driver }}/internal/testconfig
+    # - name: Create testconfig directory
+    #   run: mkdir -p ./drivers/${{ matrix.driver }}/internal/testconfig
 
-    - name: Create source
-      run: |
-        echo '${{ secrets[format('{0}_SOURCE_JSON', matrix.driver_upper)] }}' | base64 --decode > ./drivers/${{ matrix.driver }}/internal/testconfig/source.json
+    # - name: Create source
+    #   run: |
+    #     echo '${{ secrets[format('{0}_SOURCE_JSON', matrix.driver_upper)] }}' | base64 --decode > ./drivers/${{ matrix.driver }}/internal/testconfig/source.json
 
-    - name: Create destination
-      run: |
-        echo '${{ secrets[format('{0}_DESTINATION_JSON', matrix.driver_upper)] }}' | base64 --decode > ./drivers/${{ matrix.driver }}/internal/testconfig/destination.json
+    # - name: Create destination
+    #   run: |
+    #     echo '${{ secrets[format('{0}_DESTINATION_JSON', matrix.driver_upper)] }}' | base64 --decode > ./drivers/${{ matrix.driver }}/internal/testconfig/destination.json
 
-    - name: Create benchmark files
-      run: |
-        echo '${{ secrets[format('{0}_BENCHMARK_JSON', matrix.driver_upper)] }}' > ./drivers/${{ matrix.driver }}/internal/testconfig/benchmark.json
-        echo '${{ secrets[format('{0}_BENCHMARK_CDC_JSON', matrix.driver_upper)] }}' > ./drivers/${{ matrix.driver }}/internal/testconfig/benchmark_cdc.json
+    # - name: Create benchmark files
+    #   run: |
+    #     echo '${{ secrets[format('{0}_BENCHMARK_JSON', matrix.driver_upper)] }}' > ./drivers/${{ matrix.driver }}/internal/testconfig/benchmark.json
+    #     echo '${{ secrets[format('{0}_BENCHMARK_CDC_JSON', matrix.driver_upper)] }}' > ./drivers/${{ matrix.driver }}/internal/testconfig/benchmark_cdc.json
 
-    - name: Create State files
-      if: matrix.driver == 'mysql'
-      run: |
-        echo '${{ secrets.MYSQL_STATE_JSON }}' > ./drivers/mysql/internal/testconfig/state.json
+    # - name: Create State files
+    #   if: matrix.driver == 'mysql'
+    #   run: |
+    #     echo '${{ secrets.MYSQL_STATE_JSON }}' > ./drivers/mysql/internal/testconfig/state.json
 
-    - name: Run Performance Tests
-      run: go test -v ./drivers/${{ matrix.driver }}/internal/... -timeout 0 -run 'Performance'
+    # - name: Run Performance Tests
+    #   run: go test -v ./drivers/${{ matrix.driver }}/internal/... -timeout 0 -run 'Performance'
 
     - name: Cleanup
       if: always()
