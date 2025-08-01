@@ -113,7 +113,7 @@ jobs:
       if: always()
       run: |
         aws glue delete-database --name performance_${{ matrix.driver }} || { echo "failed to delete glue database: performance_${{ matrix.driver }}"; aws glue get-database --name performance_${{ matrix.driver }} || true; }
-        aws s3 rm s3://olake-test-data/performance_${{ matrix.driver }} --recursive || true
+        aws s3 rm s3://dz-stag-github-actions/performance_${{ matrix.driver }} --recursive || { echo "failed to delete s3 bucket: performance_${{ matrix.driver }}"; aws s3 ls s3://dz-stag-github-actions/performance_${{ matrix.driver }} || true; }
         echo "Catalog cleanup completed"
 
         if [[ "${{ matrix.driver }}" != "oracle" ]]; then
