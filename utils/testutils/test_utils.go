@@ -471,8 +471,15 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 			return output, nil
 		}
 		if err != nil || code != 0 {
+			t.Logf("🟡 SyncWithTimeout failed (output): %s", string(output))
+			t.Logf("🟡 SyncWithTimeout failed (err): %s", err)
+			t.Logf("🟡 SyncWithTimeout failed (code): %d", code)
 			return output, err
 		}
+
+		t.Logf("✅ SyncWithTimeout successful (output): %s", string(output))
+		t.Logf("✅ SyncWithTimeout successful (err): %s", err)
+		t.Logf("✅ SyncWithTimeout successful (code): %d", code)
 		return output, nil
 	}
 
