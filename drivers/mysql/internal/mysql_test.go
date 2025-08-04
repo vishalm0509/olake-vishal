@@ -32,3 +32,4 @@ func TestMySQLPerformance(t *testing.T) {
 
 	config.TestPerformance(t)
 }
+
