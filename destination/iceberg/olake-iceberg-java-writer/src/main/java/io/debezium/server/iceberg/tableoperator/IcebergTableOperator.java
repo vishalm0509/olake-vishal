@@ -166,10 +166,10 @@ public class IcebergTableOperator {
         if (createIdentifierFields) {
           usFinal.setIdentifierFields(newSchema.identifierFieldNames());
         }
-        Schema newSchemaCombinedFinal = usFinal.apply();
+        // Schema newSchemaCombinedFinal = usFinal.apply();
         if (!icebergTable.schema().sameSchema(newSchemaCombined)) {
           LOGGER.warn("Extending schema of {}", icebergTable.name());
-          newSchemaCombinedFinal.commit();
+          usFinal.commit();
         }
       }
     }
