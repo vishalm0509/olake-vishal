@@ -474,7 +474,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 			t.Logf("🟡 SyncWithTimeout failed (output): %s", string(output))
 			t.Logf("🟡 SyncWithTimeout failed (err): %s", err)
 			t.Logf("🟡 SyncWithTimeout failed (code): %d", code)
-			return output, err
+			return output, fmt.Errorf("sync failed %s", err)
 		}
 
 		t.Logf("✅ SyncWithTimeout successful (output): %s", string(output))
