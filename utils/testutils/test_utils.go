@@ -402,6 +402,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 			return false, err
 		}
 
+		
 		var benchmarkStats map[string]interface{}
 		if err := utils.UnmarshalFile(filepath.Join(config.HostRoot, fmt.Sprintf("drivers/%s/internal/testconfig/benchmark.json", config.Driver)), &benchmarkStats, false); err != nil {
 			return false, err
