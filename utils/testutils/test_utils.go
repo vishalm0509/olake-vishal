@@ -402,7 +402,6 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 			return false, err
 		}
 
-		
 		var benchmarkStats map[string]interface{}
 		if err := utils.UnmarshalFile(filepath.Join(config.HostRoot, fmt.Sprintf("drivers/%s/internal/testconfig/benchmark.json", config.Driver)), &benchmarkStats, false); err != nil {
 			return false, err
@@ -470,12 +469,14 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 	syncWithTimeout := func(ctx context.Context, c testcontainers.Container, cmd string) ([]byte, error) {
 		timedCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 		defer cancel()
-		_, output, err := utils.ExecCommand(timedCtx, c, cmd)
+		code, output, err := utils.ExecCommand(timedCtx, c, cmd)
+		t.Logf("Sync command output: %s", string(output))
+		t.Logf("Sync command error: %v", err)
 		// check if sync was canceled due to timeout (expected)
 		if timedCtx.Err() == context.DeadlineExceeded {
 			return output, nil
 		}
-		if err != nil {
+		if err != nil || code != 0 {
 			return output, fmt.Errorf("sync failed: %s", err)
 		}
 		return output, nil
@@ -514,7 +515,10 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 							require.NoError(t, err, "Failed to update streams")
 
 							syncCmd := syncCommand(*cfg.TestConfig, true, cfg.UsesPreChunkedState)
+							t.Logf("Post ready sync command: %s", syncCmd)
 							output, err = syncWithTimeout(ctx, c, syncCmd)
+							t.Logf("Post ready sync command output: %s", string(output))
+							t.Logf("Post ready sync command error: %v", err)
 							require.NoError(t, err, fmt.Sprintf("Failed to perform sync:\n%s", string(output)))
 							t.Log(string(output))
 
