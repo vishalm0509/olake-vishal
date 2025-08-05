@@ -375,14 +375,21 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 
 	// checks if the current rps (from stats.json) is at least 90% of the benchmark rps
 	isRPSAboveBenchmark := func(config TestConfig, isBackfill bool) (bool, error) {
-		benchmarkFile := utils.Ternary(isBackfill, "benchmark.json", "benchmark_cdc.json").(string)
-
 		var stats map[string]interface{}
 		if err := utils.UnmarshalFile(filepath.Join(config.HostRoot, fmt.Sprintf("drivers/%s/internal/testconfig/%s", config.Driver, "stats.json")), &stats, false); err != nil {
 			return false, err
 		}
 
-		getRPSFromStats := func(stats map[string]interface{}) (float64, error) {
+		getRPSFromStats := func(stats map[string]interface{}, isBenchmark bool) (float64, error) {
+			if isBenchmark {
+				testType := utils.Ternary(isBackfill, "backfill", "cdc").(string)
+				benchmarkRps, err := typeutils.ReformatFloat64(stats[testType])
+				if err != nil {
+					return 0, err
+				}
+				return benchmarkRps.(float64), nil
+			}
+
 			rps, err := typeutils.ReformatFloat64(strings.Split(stats["Speed"].(string), " ")[0])
 			if err != nil {
 				return 0, err
@@ -390,17 +397,17 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 			return rps.(float64), nil
 		}
 
-		rps, err := getRPSFromStats(stats)
+		rps, err := getRPSFromStats(stats, false)
 		if err != nil {
 			return false, err
 		}
 
 		var benchmarkStats map[string]interface{}
-		if err := utils.UnmarshalFile(filepath.Join(config.HostRoot, fmt.Sprintf("drivers/%s/internal/testconfig/%s", config.Driver, benchmarkFile)), &benchmarkStats, false); err != nil {
+		if err := utils.UnmarshalFile(filepath.Join(config.HostRoot, fmt.Sprintf("drivers/%s/internal/testconfig/benchmark.json", config.Driver)), &benchmarkStats, false); err != nil {
 			return false, err
 		}
 
-		benchmarkRps, err := getRPSFromStats(benchmarkStats)
+		benchmarkRps, err := getRPSFromStats(benchmarkStats, true)
 		if err != nil {
 			return false, err
 		}
@@ -421,12 +428,10 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 	syncCommand := func(config TestConfig, isBackfill bool, usesPreChunkedState bool) string {
 		baseCmd := fmt.Sprintf("/test-olake/build.sh driver-%s sync --config %s --catalog %s --destination %s", config.Driver, config.SourcePath, config.CatalogPath, config.DestinationPath)
 
-		// for cdc, we need state file
 		if !isBackfill {
 			baseCmd = fmt.Sprintf("%s --state %s", baseCmd, config.StatePath)
 		}
-
-		// if we are using pre-chunked state for backfill
+		// use state file for backfill if pre-chunked state is used
 		if isBackfill && usesPreChunkedState {
 			baseCmd = fmt.Sprintf("%s --state %s", baseCmd, config.StatePath)
 		}
@@ -439,7 +444,6 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 			return ""
 		}
 
-		// Create a jq condition that checks if stream_name is in the provided array
 		streamConditions := make([]string, len(stream))
 		for i, s := range stream {
 			streamConditions[i] = fmt.Sprintf(`.stream_name == "%s"`, s)
@@ -465,21 +469,14 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 	syncWithTimeout := func(ctx context.Context, c testcontainers.Container, cmd string) ([]byte, error) {
 		timedCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 		defer cancel()
-		code, output, err := utils.ExecCommand(timedCtx, c, cmd)
-		// check if sync was cancelled due to timeout (expected)
+		_, output, err := utils.ExecCommand(timedCtx, c, cmd)
+		// check if sync was canceled due to timeout (expected)
 		if timedCtx.Err() == context.DeadlineExceeded {
 			return output, nil
 		}
-		if err != nil || code != 0 {
-			t.Logf("🟡 SyncWithTimeout failed (output): %s", string(output))
-			t.Logf("🟡 SyncWithTimeout failed (err): %s", err)
-			t.Logf("🟡 SyncWithTimeout failed (code): %d", code)
-			return output, fmt.Errorf("sync failed %s", err)
+		if err != nil {
+			return output, fmt.Errorf("sync failed: %s", err)
 		}
-
-		t.Logf("✅ SyncWithTimeout successful (output): %s", string(output))
-		t.Logf("✅ SyncWithTimeout successful (err): %s", err)
-		t.Logf("✅ SyncWithTimeout successful (code): %d", code)
 		return output, nil
 	}
 

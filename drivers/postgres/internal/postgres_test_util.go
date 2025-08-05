@@ -250,15 +250,15 @@ func ExecuteQueryPerformance(ctx context.Context, t *testing.T, op string, backf
 
 	switch op {
 	case "setup_cdc":
-		// truncate the cdc tables
 		for _, stream := range backfillStreams {
 			_, err := db.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s_cdc", stream))
 			require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", op), err)
 		}
 
 	case "trigger_cdc":
+		// insert records in batches
 		batchSize := 300_000
-		totalRows := 10_000_000
+		totalRows := 15_000_000
 
 		err := utils.Concurrent(ctx, backfillStreams, 2, func(ctx context.Context, stream string, executionNumber int) error {
 			for offset := 0; offset < totalRows; offset += batchSize {
