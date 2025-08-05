@@ -471,7 +471,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 		defer cancel()
 		code, output, err := utils.ExecCommand(timedCtx, c, cmd)
 		t.Logf("Sync command output: %s", string(output))
-		t.Logf("Sync command error: %v", err)
+		// t.Logf("Sync command error: %v", err)
 		// check if sync was canceled due to timeout (expected)
 		if timedCtx.Err() == context.DeadlineExceeded {
 			return output, nil
@@ -518,7 +518,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 							t.Logf("Post ready sync command: %s", syncCmd)
 							output, err = syncWithTimeout(ctx, c, syncCmd)
 							t.Logf("Post ready sync command output: %s", string(output))
-							t.Logf("Post ready sync command error: %v", err)
+							// t.Logf("Post ready sync command error: %v", err)
 							require.NoError(t, err, fmt.Sprintf("Failed to perform sync:\n%s", string(output)))
 							t.Log(string(output))
 
