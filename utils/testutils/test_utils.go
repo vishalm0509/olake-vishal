@@ -505,9 +505,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 								return fmt.Errorf("failed to perform discover:\n%s", string(output))
 							}
 							t.Log(string(output))
-							t.Logf("🟡 discover command completed for %s", cfg.TestConfig.Driver)
 
-							t.Logf("🟡 running update streams command for %s", cfg.TestConfig.Driver)
 							updateStreamsCmd := updateStreamsCommand(*cfg.TestConfig, cfg.Namespace, cfg.BackfillStreams, true)
 							if code, _, err := utils.ExecCommand(ctx, c, updateStreamsCmd); err != nil || code != 0 {
 								return fmt.Errorf("failed to update streams: %s", err)
@@ -516,15 +514,13 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 							syncCmd := syncCommand(*cfg.TestConfig, true, cfg.UsesPreChunkedState)
 							output, err = syncWithTimeout(ctx, c, syncCmd)
 							if err != nil {
-								return fmt.Errorf("failed to perform sync:\n%s", string(output))
+								return fmt.Errorf("failed to perform sync: %s\n%s", err, string(output))
 							}
 							t.Log(string(output))
-							t.Logf("🟡 sync command completed for %s", cfg.TestConfig.Driver)
 
-							t.Logf("🟡 checking RPS for %s", cfg.TestConfig.Driver)
 							checkRPS, err := isRPSAboveBenchmark(*cfg.TestConfig, true)
 							if err != nil {
-								return fmt.Errorf("failed to check RPS: %s", err)
+								return fmt.Errorf("failed to check rps: %s", err)
 							}
 							require.True(t, checkRPS, fmt.Sprintf("%s backfill performance below benchmark", cfg.TestConfig.Driver))
 							t.Logf("✅ SUCCESS: %s backfill", cfg.TestConfig.Driver)
@@ -533,18 +529,14 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 								t.Logf("running cdc test for %s", cfg.TestConfig.Driver)
 
 								cfg.ExecuteQuery(ctx, t, "setup_cdc", cfg.BackfillStreams)
-								t.Logf("🟡 setup_cdc command completed for %s", cfg.TestConfig.Driver)
 
-								t.Logf("🟡 running discover command for %s", cfg.TestConfig.Driver)
 								discoverCmd := discoverCommand(*cfg.TestConfig)
 								code, output, err := utils.ExecCommand(ctx, c, discoverCmd)
 								if err != nil || code != 0 {
 									return fmt.Errorf("failed to perform discover:\n%s", string(output))
 								}
 								t.Log(string(output))
-								t.Logf("🟡 discover command completed for %s", cfg.TestConfig.Driver)
 
-								t.Logf("🟡 running update streams command for %s", cfg.TestConfig.Driver)
 								updateStreamsCmd := updateStreamsCommand(*cfg.TestConfig, cfg.Namespace, cfg.CDCStreams, false)
 								code, _, err = utils.ExecCommand(ctx, c, updateStreamsCmd)
 								if err != nil || code != 0 {
@@ -557,27 +549,21 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 									return fmt.Errorf("failed to perform initial sync:\n%s", string(output))
 								}
 								t.Log(string(output))
-								t.Logf("🟡 sync command completed for %s", cfg.TestConfig.Driver)
 
-								t.Logf("🟡 running trigger_cdc command for %s", cfg.TestConfig.Driver)
 								cfg.ExecuteQuery(ctx, t, "trigger_cdc", cfg.BackfillStreams)
-								t.Logf("🟡 trigger_cdc command completed for %s", cfg.TestConfig.Driver)
 
-								t.Logf("🟡 running sync command for %s", cfg.TestConfig.Driver)
 								syncCmd = syncCommand(*cfg.TestConfig, false, false)
 								output, err = syncWithTimeout(ctx, c, syncCmd)
 								if err != nil {
-									return fmt.Errorf("failed to perform CDC sync:\n%s", string(output))
+									return fmt.Errorf("failed to perform cdc sync: %s\n%s", err, string(output))
 								}
 								t.Log(string(output))
-								t.Logf("🟡 sync command completed for %s", cfg.TestConfig.Driver)
 
-								t.Logf("🟡 checking RPS for %s", cfg.TestConfig.Driver)
 								checkRPS, err := isRPSAboveBenchmark(*cfg.TestConfig, false)
 								if err != nil {
-									return fmt.Errorf("failed to check RPS: %s", err)
+									return fmt.Errorf("failed to check rps: %s", err)
 								}
-								require.True(t, checkRPS, fmt.Sprintf("%s CDC performance below benchmark", cfg.TestConfig.Driver))
+								require.True(t, checkRPS, fmt.Sprintf("%s cdc performance below benchmark", cfg.TestConfig.Driver))
 								t.Logf("✅ SUCCESS: %s cdc", cfg.TestConfig.Driver)
 							}
 							return nil

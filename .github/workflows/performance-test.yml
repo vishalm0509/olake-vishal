@@ -94,11 +94,6 @@ jobs:
       run: |
         echo '${{ secrets[format('{0}_DESTINATION_JSON', matrix.driver_upper)] }}' | base64 --decode > ./drivers/${{ matrix.driver }}/internal/testdata/destination.json
 
-    - name: Create State files
-      if: matrix.driver == 'mysql'
-      run: |
-        echo '${{ secrets.MYSQL_STATE_JSON }}' > ./drivers/mysql/internal/testconfig/state.json
-
     - name: Run Performance Tests
       run: go test -v ./drivers/${{ matrix.driver }}/internal/... -timeout 0 -run 'Performance'
 
