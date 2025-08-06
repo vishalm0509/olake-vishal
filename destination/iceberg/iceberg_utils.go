@@ -33,7 +33,7 @@ func determineMaxBatchSize() int64 {
 	case ramGB <= 8:
 		batchSize = 100 * 1024 * 1024 // 100MB
 	case ramGB <= 16:
-		batchSize = 200 * 1024 * 1024 // 200MB
+		batchSize = 100 * 1024 * 1024 // 100MB
 	case ramGB <= 32:
 		batchSize = 400 * 1024 * 1024 // 400MB
 	default:

@@ -497,25 +497,34 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 								return fmt.Errorf("failed to install dependencies: %s \n%s", err, string(output))
 							}
 
+							t.Logf("running backfill test for %s", cfg.TestConfig.Driver)
+
+							t.Logf("🟡 running discover command for %s", cfg.TestConfig.Driver)
 							discoverCmd := discoverCommand(*cfg.TestConfig)
 							code, output, err := utils.ExecCommand(ctx, c, discoverCmd)
 							if err != nil || code != 0 {
 								return fmt.Errorf("failed to perform discover: %s \n%s", err, string(output))
 							}
 							t.Log(string(output))
+							t.Logf("🟡 discover command completed for %s", cfg.TestConfig.Driver)
 
+							t.Logf("🟡 running update streams command for %s", cfg.TestConfig.Driver)
 							updateStreamsCmd := updateStreamsCommand(*cfg.TestConfig, cfg.Namespace, cfg.BackfillStreams, true)
 							if code, _, err := utils.ExecCommand(ctx, c, updateStreamsCmd); err != nil || code != 0 {
 								return fmt.Errorf("failed to update streams: %s", err)
 							}
+							t.Logf("🟡 update streams command completed for %s", cfg.TestConfig.Driver)
 
+							t.Logf("🟡 running sync command for %s", cfg.TestConfig.Driver)
 							syncCmd := syncCommand(*cfg.TestConfig, true, cfg.UsesPreChunkedState)
 							output, err = syncWithTimeout(ctx, c, syncCmd)
 							if err != nil {
 								return fmt.Errorf("failed to perform sync: %s \n%s", err, string(output))
 							}
 							t.Log(string(output))
+							t.Logf("🟡 sync command completed for %s", cfg.TestConfig.Driver)
 
+							t.Logf("🟡 checking RPS for %s", cfg.TestConfig.Driver)
 							checkRPS, err := isRPSAboveBenchmark(*cfg.TestConfig, true)
 							if err != nil {
 								return fmt.Errorf("failed to check RPS: %s", err)
@@ -524,37 +533,52 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 							t.Logf("✅ SUCCESS: %s backfill", cfg.TestConfig.Driver)
 
 							if cfg.SupportsCDC {
-								cfg.ExecuteQuery(ctx, t, "setup_cdc", cfg.BackfillStreams)
+								t.Logf("running cdc test for %s", cfg.TestConfig.Driver)
 
+								t.Logf("🟡 running setup_cdc command for %s", cfg.TestConfig.Driver)
+								cfg.ExecuteQuery(ctx, t, "setup_cdc", cfg.BackfillStreams)
+								t.Logf("🟡 setup_cdc command completed for %s", cfg.TestConfig.Driver)
+
+								t.Logf("🟡 running discover command for %s", cfg.TestConfig.Driver)
 								discoverCmd := discoverCommand(*cfg.TestConfig)
 								code, output, err := utils.ExecCommand(ctx, c, discoverCmd)
 								if err != nil || code != 0 {
 									return fmt.Errorf("failed to perform discover: %s \n%s", err, string(output))
 								}
 								t.Log(string(output))
+								t.Logf("🟡 discover command completed for %s", cfg.TestConfig.Driver)
 
+								t.Logf("🟡 running update streams command for %s", cfg.TestConfig.Driver)
 								updateStreamsCmd := updateStreamsCommand(*cfg.TestConfig, cfg.Namespace, cfg.CDCStreams, false)
 								code, _, err = utils.ExecCommand(ctx, c, updateStreamsCmd)
 								if err != nil || code != 0 {
 									return fmt.Errorf("failed to update streams: %s", err)
 								}
+								t.Logf("🟡 update streams command completed for %s", cfg.TestConfig.Driver)
 
+								t.Logf("🟡 running sync command for %s", cfg.TestConfig.Driver)
 								syncCmd := syncCommand(*cfg.TestConfig, true, false)
 								code, output, err = utils.ExecCommand(ctx, c, syncCmd)
 								if err != nil || code != 0 {
 									return fmt.Errorf("failed to perform initial sync: %s \n%s", err, string(output))
 								}
 								t.Log(string(output))
+								t.Logf("🟡 sync command completed for %s", cfg.TestConfig.Driver)
 
+								t.Logf("🟡 running trigger_cdc command for %s", cfg.TestConfig.Driver)
 								cfg.ExecuteQuery(ctx, t, "trigger_cdc", cfg.BackfillStreams)
+								t.Logf("🟡 trigger_cdc command completed for %s", cfg.TestConfig.Driver)
 
+								t.Logf("🟡 running sync command for %s", cfg.TestConfig.Driver)
 								syncCmd = syncCommand(*cfg.TestConfig, false, false)
 								output, err = syncWithTimeout(ctx, c, syncCmd)
 								if err != nil {
 									return fmt.Errorf("failed to perform CDC sync: %s \n%s", err, string(output))
 								}
 								t.Log(string(output))
+								t.Logf("🟡 sync command completed for %s", cfg.TestConfig.Driver)
 
+								t.Logf("🟡 checking RPS for %s", cfg.TestConfig.Driver)
 								checkRPS, err := isRPSAboveBenchmark(*cfg.TestConfig, false)
 								if err != nil {
 									return fmt.Errorf("failed to check RPS: %s", err)
