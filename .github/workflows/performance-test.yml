@@ -29,8 +29,8 @@ jobs:
         - driver: postgres
           driver_upper: POSTGRES
         # TODO: add these drivers after benchmarking
-        - driver: mongodb
-          driver_upper: MONGODB
+        # - driver: mongodb
+        #   driver_upper: MONGODB
         - driver: oracle
           driver_upper: ORACLE
       fail-fast: false
