@@ -86,20 +86,13 @@ jobs:
       working-directory: ./destination/iceberg/olake-iceberg-java-writer
       run: mvn clean package -DskipTests
 
-    - name: Create testconfig directory
-      run: mkdir -p ./drivers/${{ matrix.driver }}/internal/testconfig
-
     - name: Create source
       run: |
-        echo '${{ secrets[format('{0}_SOURCE_JSON', matrix.driver_upper)] }}' | base64 --decode > ./drivers/${{ matrix.driver }}/internal/testconfig/source.json
+        echo '${{ secrets[format('{0}_SOURCE_JSON', matrix.driver_upper)] }}' | base64 --decode > ./drivers/${{ matrix.driver }}/internal/testdata/source.json
 
     - name: Create destination
       run: |
-        echo '${{ secrets[format('{0}_DESTINATION_JSON', matrix.driver_upper)] }}' | base64 --decode > ./drivers/${{ matrix.driver }}/internal/testconfig/destination.json
-
-    - name: Create benchmark files
-      run: |
-        echo '${{ secrets[format('{0}_BENCHMARK_JSON', matrix.driver_upper)] }}' > ./drivers/${{ matrix.driver }}/internal/testconfig/benchmark.json
+        echo '${{ secrets[format('{0}_DESTINATION_JSON', matrix.driver_upper)] }}' | base64 --decode > ./drivers/${{ matrix.driver }}/internal/testdata/destination.json
 
     - name: Create State files
       if: matrix.driver == 'mysql'
