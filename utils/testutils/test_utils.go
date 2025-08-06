@@ -494,16 +494,15 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 					PostReadies: []testcontainers.ContainerHook{
 						func(ctx context.Context, c testcontainers.Container) error {
 							if code, output, err := utils.ExecCommand(ctx, c, installCmd); err != nil || code != 0 {
-								return fmt.Errorf("failed to install dependencies: %s \n%s", err, string(output))
+								return fmt.Errorf("failed to install dependencies:\n%s", string(output))
 							}
 
 							t.Logf("running backfill test for %s", cfg.TestConfig.Driver)
 
-							t.Logf("🟡 running discover command for %s", cfg.TestConfig.Driver)
 							discoverCmd := discoverCommand(*cfg.TestConfig)
 							code, output, err := utils.ExecCommand(ctx, c, discoverCmd)
 							if err != nil || code != 0 {
-								return fmt.Errorf("failed to perform discover: %s \n%s", err, string(output))
+								return fmt.Errorf("failed to perform discover:\n%s", string(output))
 							}
 							t.Log(string(output))
 							t.Logf("🟡 discover command completed for %s", cfg.TestConfig.Driver)
@@ -513,13 +512,11 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 							if code, _, err := utils.ExecCommand(ctx, c, updateStreamsCmd); err != nil || code != 0 {
 								return fmt.Errorf("failed to update streams: %s", err)
 							}
-							t.Logf("🟡 update streams command completed for %s", cfg.TestConfig.Driver)
 
-							t.Logf("🟡 running sync command for %s", cfg.TestConfig.Driver)
 							syncCmd := syncCommand(*cfg.TestConfig, true, cfg.UsesPreChunkedState)
 							output, err = syncWithTimeout(ctx, c, syncCmd)
 							if err != nil {
-								return fmt.Errorf("failed to perform sync: %s \n%s", err, string(output))
+								return fmt.Errorf("failed to perform sync:\n%s", string(output))
 							}
 							t.Log(string(output))
 							t.Logf("🟡 sync command completed for %s", cfg.TestConfig.Driver)
@@ -535,7 +532,6 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 							if cfg.SupportsCDC {
 								t.Logf("running cdc test for %s", cfg.TestConfig.Driver)
 
-								t.Logf("🟡 running setup_cdc command for %s", cfg.TestConfig.Driver)
 								cfg.ExecuteQuery(ctx, t, "setup_cdc", cfg.BackfillStreams)
 								t.Logf("🟡 setup_cdc command completed for %s", cfg.TestConfig.Driver)
 
@@ -543,7 +539,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 								discoverCmd := discoverCommand(*cfg.TestConfig)
 								code, output, err := utils.ExecCommand(ctx, c, discoverCmd)
 								if err != nil || code != 0 {
-									return fmt.Errorf("failed to perform discover: %s \n%s", err, string(output))
+									return fmt.Errorf("failed to perform discover:\n%s", string(output))
 								}
 								t.Log(string(output))
 								t.Logf("🟡 discover command completed for %s", cfg.TestConfig.Driver)
@@ -554,13 +550,11 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 								if err != nil || code != 0 {
 									return fmt.Errorf("failed to update streams: %s", err)
 								}
-								t.Logf("🟡 update streams command completed for %s", cfg.TestConfig.Driver)
 
-								t.Logf("🟡 running sync command for %s", cfg.TestConfig.Driver)
 								syncCmd := syncCommand(*cfg.TestConfig, true, false)
 								code, output, err = utils.ExecCommand(ctx, c, syncCmd)
 								if err != nil || code != 0 {
-									return fmt.Errorf("failed to perform initial sync: %s \n%s", err, string(output))
+									return fmt.Errorf("failed to perform initial sync:\n%s", string(output))
 								}
 								t.Log(string(output))
 								t.Logf("🟡 sync command completed for %s", cfg.TestConfig.Driver)
@@ -573,7 +567,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 								syncCmd = syncCommand(*cfg.TestConfig, false, false)
 								output, err = syncWithTimeout(ctx, c, syncCmd)
 								if err != nil {
-									return fmt.Errorf("failed to perform CDC sync: %s \n%s", err, string(output))
+									return fmt.Errorf("failed to perform CDC sync:\n%s", string(output))
 								}
 								t.Log(string(output))
 								t.Logf("🟡 sync command completed for %s", cfg.TestConfig.Driver)
@@ -598,7 +592,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 			ContainerRequest: req,
 			Started:          true,
 		})
-		require.NoError(t, err, fmt.Sprintf("performance test failed: \n%s", err))
+		require.NoError(t, err, "performance test failed")
 		defer func() {
 			if err := container.Terminate(ctx); err != nil {
 				t.Logf("warning: failed to terminate container: %v", err)
