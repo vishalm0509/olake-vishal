@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   performance-tests:
-    environment: Performance Testing
+    # environment: Performance Testing
     runs-on: ubuntu-latest
     strategy:
       matrix:
