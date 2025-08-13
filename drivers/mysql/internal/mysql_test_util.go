@@ -138,10 +138,12 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 		// truncate the cdc tables
 		for _, stream := range streams {
 			_, err := db.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s_cdc", stream))
+			t.Logf("🟡 setup_cdc: truncated %s_cdc", stream)
 			require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", operation), err)
 			// mysql chunking strategy does not support 0 record sync
 			_, err = db.ExecContext(ctx, fmt.Sprintf("INSERT INTO %s_cdc SELECT * FROM %s ORDER BY id LIMIT 1", stream, stream))
 			require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", operation), err)
+			t.Logf("🟡 setup_cdc: inserted 1 record into %s_cdc", stream)
 		}
 		return
 
