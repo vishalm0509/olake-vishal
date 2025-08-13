@@ -55,15 +55,15 @@ type SyncSpeed struct {
 	Speed string
 }
 type TestConfig struct {
-	Driver           string
-	HostRootPath     string
-	SourcePath       string
-	CatalogPath      string
-	DestinationPath  string
-	StatePath        string
-	StatsPath        string
-	HostTestDataPath string
-	DummyStreamPath  string
+	Driver              string
+	HostRootPath        string
+	SourcePath          string
+	CatalogPath         string
+	DestinationPath     string
+	StatePath           string
+	StatsPath           string
+	HostTestDataPath    string
+	HostTestCatalogPath string
 }
 
 // this benchmark is for performance test which runs on a github runner
@@ -85,17 +85,18 @@ func GetTestConfig(driver string) *TestConfig {
 	// root path is olake's root path
 	rootPath := filepath.Join(pwd, "../../..")
 
-	path := "/test-olake/drivers/%s/internal/testdata/%s"
+	containerTestDataPath := fmt.Sprintf("/test-olake/drivers/%s/internal/testdata/%s", driver, "%s")
+	hostTestDataPath := filepath.Join(rootPath, "drivers", driver, "internal", "testdata", "%s")
 	return &TestConfig{
-		Driver:           driver,
-		HostRootPath:     rootPath,
-		HostTestDataPath: filepath.Join(rootPath, "drivers", driver, "internal", "testdata"),
-		SourcePath:       fmt.Sprintf(path, driver, "source.json"),
-		CatalogPath:      fmt.Sprintf(path, driver, "streams.json"),
-		DestinationPath:  fmt.Sprintf(path, driver, "destination.json"),
-		StatePath:        fmt.Sprintf(path, driver, "state.json"),
-		StatsPath:        fmt.Sprintf(path, driver, "stats.json"),
-		DummyStreamPath:  fmt.Sprintf(path, driver, "test_streams.json"),
+		Driver:              driver,
+		HostRootPath:        rootPath,
+		HostTestDataPath:    fmt.Sprintf(hostTestDataPath, ""),
+		HostTestCatalogPath: fmt.Sprintf(hostTestDataPath, "test_streams.json"),
+		SourcePath:          fmt.Sprintf(containerTestDataPath, "source.json"),
+		CatalogPath:         fmt.Sprintf(containerTestDataPath, "streams.json"),
+		DestinationPath:     fmt.Sprintf(containerTestDataPath, "destination.json"),
+		StatePath:           fmt.Sprintf(containerTestDataPath, "state.json"),
+		StatsPath:           fmt.Sprintf(containerTestDataPath, "stats.json"),
 	}
 }
 
@@ -179,7 +180,7 @@ func (cfg *IntegrationTest) TestIntegration(t *testing.T) {
 							}
 
 							// 4. Verify streams.json file
-							streamsJSON, err := os.ReadFile(cfg.TestConfig.DummyStreamPath)
+							streamsJSON, err := os.ReadFile(cfg.TestConfig.HostTestCatalogPath)
 							if err != nil {
 								return fmt.Errorf("failed to read expected streams JSON: %s", err)
 							}
