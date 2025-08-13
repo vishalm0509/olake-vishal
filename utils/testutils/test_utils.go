@@ -25,6 +25,9 @@ const (
 	icebergDatabase     = "olake_iceberg"
 	sparkConnectAddress = "sc://localhost:15002"
 	installCmd          = "apt-get update && apt-get install -y openjdk-17-jre-headless maven default-mysql-client postgresql postgresql-client iproute2 dnsutils iputils-ping netcat-openbsd nodejs npm jq && npm install -g chalk-cli"
+
+	SyncTimeout        = 10 * time.Minute
+	BenchmarkThreshold = 0.9
 )
 
 type IntegrationTest struct {
@@ -96,10 +99,9 @@ func GetTestConfig(driver string) *TestConfig {
 	}
 }
 
-func syncCommand(config TestConfig, isBackfill bool, usesPreChunkedState bool) string {
+func syncCommand(config TestConfig, useState bool) string {
 	baseCmd := fmt.Sprintf("/test-olake/build.sh driver-%s sync --config %s --catalog %s --destination %s", config.Driver, config.SourcePath, config.CatalogPath, config.DestinationPath)
-	// use state file for backfill if pre-chunked state is used
-	if !isBackfill || (isBackfill && usesPreChunkedState) {
+	if useState {
 		baseCmd = fmt.Sprintf("%s --state %s", baseCmd, config.StatePath)
 	}
 	return baseCmd
@@ -294,7 +296,7 @@ func (cfg *IntegrationTest) TestIntegration(t *testing.T) {
 							}
 
 							runSync := func(c testcontainers.Container, useState bool, operation, opSymbol string, schema map[string]interface{}) error {
-								cmd := syncCommand(*cfg.TestConfig, useState, false)
+								cmd := syncCommand(*cfg.TestConfig, useState)
 								if useState && operation != "" {
 									cfg.ExecuteQuery(ctx, t, []string{currentTestTable}, operation, false)
 								}
@@ -434,14 +436,14 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 		benchmarkRPS := utils.Ternary(isBackfill, benchmarkDriverStats.Backfill, benchmarkDriverStats.CDC).(float64)
 
 		t.Logf("CurrentRPS: %.2f, BenchmarkRPS: %.2f", rps, benchmarkRPS)
-		if rps < 0.9*benchmarkRPS {
+		if rps < BenchmarkThreshold*benchmarkRPS {
 			return false, fmt.Errorf("❌ RPS is less than benchmark RPS")
 		}
 		return true, nil
 	}
 
 	syncWithTimeout := func(ctx context.Context, c testcontainers.Container, cmd string) ([]byte, error) {
-		timedCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+		timedCtx, cancel := context.WithTimeout(ctx, SyncTimeout)
 		defer cancel()
 		code, output, err := utils.ExecCommand(timedCtx, c, cmd)
 		// check if sync was canceled due to timeout (expected)
@@ -494,7 +496,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 
 							t.Log("(backfill) starting sync")
 							usePreChunkedState := cfg.TestConfig.Driver == string(constants.MySQL)
-							syncCmd := syncCommand(*cfg.TestConfig, true, usePreChunkedState)
+							syncCmd := syncCommand(*cfg.TestConfig, usePreChunkedState)
 							if output, err := syncWithTimeout(ctx, c, syncCmd); err != nil {
 								return fmt.Errorf("failed to perform sync:\n%s", string(output))
 							}
@@ -502,12 +504,12 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 
 							checkRPS, err := isRPSAboveBenchmark(*cfg.TestConfig, true)
 							if err != nil {
-								return fmt.Errorf("failed to check rps: %s", err)
+								return fmt.Errorf("failed to check RPS: %s", err)
 							}
 							require.True(t, checkRPS, fmt.Sprintf("%s backfill performance below benchmark", cfg.TestConfig.Driver))
 							t.Logf("✅ SUCCESS: %s backfill", cfg.TestConfig.Driver)
 
-							if len(cfg.CDCStreams) > 0 {
+							if len(cfg.CDCStreams) > 0 && strings.TrimSpace(cfg.CDCStreams[0]) != "" {
 								t.Logf("(cdc) running performance test for %s", cfg.TestConfig.Driver)
 
 								t.Log("(cdc) starting setup cdc")
@@ -527,7 +529,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 								}
 
 								t.Log("(cdc) starting initial sync")
-								syncCmd := syncCommand(*cfg.TestConfig, true, false)
+								syncCmd := syncCommand(*cfg.TestConfig, false)
 								if code, output, err := utils.ExecCommand(ctx, c, syncCmd); err != nil || code != 0 {
 									return fmt.Errorf("failed to perform initial sync:\n%s", string(output))
 								}
@@ -538,7 +540,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 								t.Log("(cdc) trigger cdc completed")
 
 								t.Log("(cdc) starting sync")
-								syncCmd = syncCommand(*cfg.TestConfig, false, false)
+								syncCmd = syncCommand(*cfg.TestConfig, true)
 								if output, err := syncWithTimeout(ctx, c, syncCmd); err != nil {
 									return fmt.Errorf("failed to perform CDC sync:\n%s", string(output))
 								}
@@ -546,7 +548,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 
 								checkRPS, err := isRPSAboveBenchmark(*cfg.TestConfig, false)
 								if err != nil {
-									return fmt.Errorf("failed to check rps: %s", err)
+									return fmt.Errorf("failed to check RPS: %s", err)
 								}
 								require.True(t, checkRPS, fmt.Sprintf("%s cdc performance below benchmark", cfg.TestConfig.Driver))
 								t.Logf("✅ SUCCESS: %s cdc", cfg.TestConfig.Driver)
