@@ -144,7 +144,6 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 			// mysql chunking strategy does not support 0 record sync
 			_, err = db.ExecContext(ctx, fmt.Sprintf("INSERT INTO %s SELECT * FROM %s WHERE id > 20000000 LIMIT 1", backfillStreams[idx], cdcStream))
 			require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", operation), err)
-			t.Logf("🟡 setup_cdc: inserted 1 record into %s_cdc", stream)
 		}
 		return
 
