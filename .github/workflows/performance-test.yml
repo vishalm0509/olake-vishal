@@ -1,13 +1,16 @@
 name: Performance Tests
 
 on:
-  pull_request:
+  # pull_request:
+  #   branches:
+  #   - "staging"
+  #   types: [ closed ]
+  #   paths:
+  #   - '**/*.go'
+  #   - '**/*.java'
+  push:
     branches:
-    - "staging"
-    types: [ closed ]
-    paths:
-    - '**/*.go'
-    - '**/*.java'
+    - '**'
 
 permissions:
   id-token: write
@@ -25,8 +28,8 @@ jobs:
         - driver: postgres
           driver_upper: POSTGRES
         # TODO: add benchmark tests for the below databases
-        # - driver: mongodb
-        #   driver_upper: MONGODB
+        - driver: mongodb
+          driver_upper: MONGODB
         - driver: oracle
           driver_upper: ORACLE
       fail-fast: false
