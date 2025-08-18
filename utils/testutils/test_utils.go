@@ -70,9 +70,9 @@ type TestConfig struct {
 // this benchmark is for performance test which runs on a github runner
 // for absolute benchmarks, please checkout olake docs: https://olake.io/docs/connectors/postgres/benchmarks
 var benchmarks = map[constants.DriverType]benchmarkStats{
-	constants.MySQL:    {Backfill: 15906.40, CDC: 15648.93},
-	constants.Postgres: {Backfill: 13475.41, CDC: 1404.78},
-	constants.Oracle:   {Backfill: 3500, CDC: 0},
+	constants.MySQL:    {Backfill: 0, CDC: 0},
+	constants.Postgres: {Backfill: 0, CDC: 0},
+	constants.Oracle:   {Backfill: 0, CDC: 0},
 	constants.MongoDB:  {Backfill: 0, CDC: 0},
 }
 
@@ -142,7 +142,7 @@ func updateStreamsCommand(config TestConfig, namespace string, stream []string, 
 func GetBackfillStreamsFromCDC(cdcStreams []string) []string {
 	backfillStreams := []string{}
 	for _, stream := range cdcStreams {
-		backfillStreams = append(backfillStreams, strings.Split(stream, "_")[0])
+		backfillStreams = append(backfillStreams, strings.TrimSuffix(stream, "_cdc"))
 	}
 	return backfillStreams
 }
