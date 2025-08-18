@@ -53,32 +53,64 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 			srcColl := db.Database(config.Database).Collection(backfillStreams[executionNumber-1])
 			destColl := db.Database(config.Database).Collection(cdcStream)
 
-			cursor, err := srcColl.Find(ctx, bson.D{}, options.Find().SetLimit(int64(totalRows)))
+			// cursor with server-side batch size to avoid memory blowup
+			cursor, err := srcColl.Find(
+				ctx,
+				bson.D{},
+				options.Find().
+					SetLimit(int64(totalRows)).
+					SetBatchSize(5000),
+			)
 			if err != nil {
 				return fmt.Errorf("stream: %s, error: %w", cdcStream, err)
 			}
 			defer cursor.Close(ctx)
 
-			var docs []interface{}
+			const (
+				maxBatchDocs = 100000   // max number of docs per insert
+				maxBatchSize = 40 << 20 // ~40MB safe threshold
+			)
+
+			var batch []interface{}
+			var batchSizeBytes int
+
 			for cursor.Next(ctx) {
 				var doc bson.M
 				if err := cursor.Decode(&doc); err != nil {
 					return err
 				}
-				docs = append(docs, doc)
+
+				// estimate BSON size
+				b, _ := bson.Marshal(doc)
+				docSize := len(b)
+
+				// flush if limits would be exceeded
+				if len(batch) >= maxBatchDocs || batchSizeBytes+docSize >= maxBatchSize {
+					if _, err := destColl.InsertMany(ctx, batch); err != nil {
+						return fmt.Errorf("stream: %s, error: %w", cdcStream, err)
+					}
+					batch = batch[:0]
+					batchSizeBytes = 0
+				}
+
+				batch = append(batch, doc)
+				batchSizeBytes += docSize
 			}
+
+			// flush leftovers
+			if len(batch) > 0 {
+				if _, err := destColl.InsertMany(ctx, batch); err != nil {
+					return fmt.Errorf("stream: %s, error: %w", cdcStream, err)
+				}
+			}
+
 			if err := cursor.Err(); err != nil {
 				return err
 			}
-			if len(docs) == 0 {
-				return nil
-			}
-			_, err = destColl.InsertMany(ctx, docs)
-			if err != nil {
-				return fmt.Errorf("stream: %s, error: %w", cdcStream, err)
-			}
+
 			return nil
 		})
+
 		require.NoError(t, err, fmt.Sprintf("failed to execute %s operation", operation), err)
 		return
 	}
