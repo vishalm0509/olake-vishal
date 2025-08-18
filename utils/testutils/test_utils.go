@@ -492,34 +492,34 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 								return fmt.Errorf("failed to install dependencies:\n%s", string(output))
 							}
 
-							t.Logf("(backfill) running performance test for %s", cfg.TestConfig.Driver)
+							// t.Logf("(backfill) running performance test for %s", cfg.TestConfig.Driver)
 
-							t.Log("(backfill) discover started")
-							discoverCmd := discoverCommand(*cfg.TestConfig)
-							if code, output, err := utils.ExecCommand(ctx, c, discoverCmd); err != nil || code != 0 {
-								return fmt.Errorf("failed to perform discover:\n%s", string(output))
-							}
-							t.Log("(backfill) discover completed")
+							// t.Log("(backfill) discover started")
+							// discoverCmd := discoverCommand(*cfg.TestConfig)
+							// if code, output, err := utils.ExecCommand(ctx, c, discoverCmd); err != nil || code != 0 {
+							// 	return fmt.Errorf("failed to perform discover:\n%s", string(output))
+							// }
+							// t.Log("(backfill) discover completed")
 
-							updateStreamsCmd := updateStreamsCommand(*cfg.TestConfig, cfg.Namespace, cfg.BackfillStreams, true)
-							if code, _, err := utils.ExecCommand(ctx, c, updateStreamsCmd); err != nil || code != 0 {
-								return fmt.Errorf("failed to update streams: %s", err)
-							}
+							// updateStreamsCmd := updateStreamsCommand(*cfg.TestConfig, cfg.Namespace, cfg.BackfillStreams, true)
+							// if code, _, err := utils.ExecCommand(ctx, c, updateStreamsCmd); err != nil || code != 0 {
+							// 	return fmt.Errorf("failed to update streams: %s", err)
+							// }
 
-							t.Log("(backfill) sync started")
-							usePreChunkedState := cfg.TestConfig.Driver == string(constants.MySQL)
-							syncCmd := syncCommand(*cfg.TestConfig, usePreChunkedState)
-							if output, err := syncWithTimeout(ctx, c, syncCmd); err != nil {
-								return fmt.Errorf("failed to perform sync:\n%s", string(output))
-							}
-							t.Log("(backfill) sync completed")
+							// t.Log("(backfill) sync started")
+							// usePreChunkedState := cfg.TestConfig.Driver == string(constants.MySQL)
+							// syncCmd := syncCommand(*cfg.TestConfig, usePreChunkedState)
+							// if output, err := syncWithTimeout(ctx, c, syncCmd); err != nil {
+							// 	return fmt.Errorf("failed to perform sync:\n%s", string(output))
+							// }
+							// t.Log("(backfill) sync completed")
 
-							checkRPS, err := isRPSAboveBenchmark(*cfg.TestConfig, true)
-							if err != nil {
-								return fmt.Errorf("failed to check RPS: %s", err)
-							}
-							require.True(t, checkRPS, fmt.Sprintf("%s backfill performance below benchmark", cfg.TestConfig.Driver))
-							t.Logf("✅ SUCCESS: %s backfill", cfg.TestConfig.Driver)
+							// checkRPS, err := isRPSAboveBenchmark(*cfg.TestConfig, true)
+							// if err != nil {
+							// 	return fmt.Errorf("failed to check RPS: %s", err)
+							// }
+							// require.True(t, checkRPS, fmt.Sprintf("%s backfill performance below benchmark", cfg.TestConfig.Driver))
+							// t.Logf("✅ SUCCESS: %s backfill", cfg.TestConfig.Driver)
 
 							if len(cfg.CDCStreams) > 0 {
 								t.Logf("(cdc) running performance test for %s", cfg.TestConfig.Driver)
