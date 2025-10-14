@@ -14,11 +14,14 @@
     <a href="https://olake.io/docs">
     <img alt="Documentation" src="https://img.shields.io/badge/view-Documentation-white"/>
     </a>
-    <a href="https://join.slack.com/t/getolake/shared_invite/zt-2utw44do6-g4XuKKeqBghBMy2~LcJ4ag">
+    <a href="https://olake.io/slack/">
     <img alt="slack" src="https://img.shields.io/badge/Join%20Our%20Community-Slack-blue"/>
     </a>
     <a href="https://github.com/datazip-inc/olake/blob/master/CONTRIBUTING.md">
         <img alt="Contribute to OLake" src="https://img.shields.io/badge/Contribute-OLake-2563eb"/>
+    </a>
+     <a href="https://hacktoberfest.com/">
+        <img alt="Hacktoberfest 2025" src="https://img.shields.io/badge/Hacktoberfest-2025%20🎃-orange"/>
     </a>
 </p>
 
@@ -38,7 +41,7 @@
 ### 🚀 Why OLake?
 
 - 🧠 **Smart sync**: Full + CDC replication with automatic schema discovery  
-- ⚡ **High throughput**: 46K RPS (Postgres) & 64K RPS (MySQL)
+- ⚡ **High throughput**: 319K RPS (Postgres) & 64K RPS (MySQL)
 - 💾 **Iceberg-native**: Supports Glue, Hive, JDBC, REST catalogs  
 - 🖥️ **Self-serve UI**: Deploy via Docker Compose and sync in minutes  
 - 💸 **Infra-light**: No Spark, no Flink, no Kafka, no Debezium
@@ -47,17 +50,14 @@
 
 ### 📊 Benchmarks & possible connections
 
+| Source → Destination | Throughput               | Relative Performance                 | Full Report                                                  |
+|----------------------|--------------------------|--------------------------------------|--------------------------------------------------------------|
+| Postgres → Iceberg   | 3,19,562 RPS (Full load) | 6.8× faster than Fivetran            | [Full Report](https://olake.io/docs/benchmarks?tab=postgres) |
+| MySQL → Iceberg      | 64,334 RPS (Full load)   | 9× faster than Airbyte               | WIP                                                          |
+| MongoDB → Iceberg    | WIP                      |                                      |                                                              |
+| Oracle → Iceberg     | WIP                      |                                      |                                                              |
 
-| Source → Destination | Throughput            | Relative Performance        |Full Report        |
-|----------------------|-----------------------|-----------------------------|-------------------|
-| Postgres → Iceberg   | 46,262 RPS (Full load)| 101× faster than Airbyte    |[Full Report](https://olake.io/docs/connectors/postgres/benchmarks) |
-| MySQL → Iceberg      | 64,334 RPS (Full load)| 9× faster than Airbyte     |[Full Report](https://olake.io/docs/connectors/mysql/benchmarks) |
-| MongoDB → Iceberg    | WIP          |                                     | |
-| Oracle → Iceberg     | WIP          |                             | |
-| Postgres → Object Store (Parquet)    | WIP          |                                     | |
-| MySQL → Object Store (Parquet)     | WIP          |                             | |
-| MongoDB → Object Store (Parquet)    | WIP          |                                     | |
-| Oracle → Object Store (Parquet)     | WIP          |                             | |
+
 
 
 **These are preliminary results. Fully reproducible benchmark scores will be published soon.*
@@ -72,7 +72,7 @@
 
 | Source        | Full Load    |  CDC          | Incremental       | Notes                       | Documentation               |
 |---------------|--------------|---------------|-------------------|-----------------------------|-----------------------------|
-| PostgreSQL    | ✅           | ✅ `wal2json` | ✅                 |`pgoutput` support WIP       |[Postgres Docs](https://olake.io/docs/connectors/postgres/overview) |
+| PostgreSQL    | ✅           | ✅ `pgoutput` | ✅                 |`wal2json` deprecated       |[Postgres Docs](https://olake.io/docs/connectors/postgres/overview) |
 | MySQL         | ✅           | ✅            | ✅                | Binlog-based CDC            | [MySQL Docs](https://olake.io/docs/connectors/mysql/overview) |
 | MongoDB       | ✅           | ✅            | ✅                | Oplog-based CDC             |[MongoDB Docs](https://olake.io/docs/connectors/mongodb/overview) |
 | Oracle        | ✅           | WIP  | ✅                |  JDBC based Full Load & Incremental                |  [Oracle Docs](https://olake.io/docs/connectors/oracle/overview) |
@@ -162,10 +162,10 @@ For advanced users and automation, OLake's core logic is exposed via a powerful 
 Below are other different ways you can run OLake:
 
 1. [OLake UI (Recommended)](https://olake.io/docs/getting-started/olake-ui)
-2. [Standalone Docker container](https://olake.io/docs/install/docker)
-3. [Airflow on EC2](https://olake.io/blog/olake-airflow-on-ec2?utm_source=chatgpt.com)
-4. [Airflow on Kubernetes](https://olake.io/blog/olake-airflow)
-5. Kubernetes using Helm (Coming soon!)
+2. [Kubernetes using Helm](https://olake.io/docs/install/kubernetes)
+3. [Standalone Docker container](https://olake.io/docs/install/docker-cli)
+4. [Airflow on EC2](https://olake.io/blog/olake-airflow-on-ec2?utm_source=chatgpt.com)
+5. [Airflow on Kubernetes](https://olake.io/blog/olake-airflow) 
 
 ---
 

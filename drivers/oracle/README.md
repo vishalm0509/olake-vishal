@@ -27,7 +27,7 @@ Add Oracle credentials in following format in `config.json` file. [More details.
     "host": "oracle-host",
     "username": "oracle-user",
     "password": "oracle-password",
-    "service_name": "oracle-service-name",
+    "service_name": "oracle-service-name", // provide either "service_name" or "sid"
     "sid": "ez",
     "port": 1521,
     "max_threads": 10,
@@ -117,7 +117,7 @@ Before running the Sync command, the generated `streams.json` file must be confi
 
 - Final Streams Example
 <br> `normalization` determines that level 1 flattening is required. <br>
-<br> The `append_only` flag determines whether records can be written to the iceberg delete file. If set to true, no records will be written to the delete file. Know more about delete file: [Iceberg MOR and COW](https://olake.io/iceberg/mor-vs-cow)<br>
+<br> The `append_mode` flag determines whether records can be written to the iceberg delete file. If set to true, no records will be written to the delete file. Know more about delete file: [Iceberg MOR and COW](https://olake.io/iceberg/mor-vs-cow)<br>
    ```json
    {
       "selected_streams": {
@@ -126,7 +126,7 @@ Before running the Sync command, the generated `streams.json` file must be confi
                   "partition_regex": "",
                   "stream_name": "table_1",
                   "normalization": false,
-                  "append_only": false
+                  "append_mode": false
                }
          ]
       },

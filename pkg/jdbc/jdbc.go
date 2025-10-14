@@ -15,9 +15,58 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// QuoteIdentifier returns the properly quoted identifier based on database driver
+func QuoteIdentifier(identifier string, driver constants.DriverType) string {
+	switch driver {
+	case constants.MySQL:
+		return fmt.Sprintf("`%s`", identifier) // MySQL uses backticks for quoting identifiers
+	case constants.Postgres:
+		return fmt.Sprintf("%q", identifier)
+	case constants.Oracle:
+		return fmt.Sprintf("%q", identifier)
+	default:
+		return identifier
+	}
+}
+
+// GetPlaceholder returns the appropriate placeholder for the given driver
+func GetPlaceholder(driver constants.DriverType) func(int) string {
+	switch driver {
+	case constants.MySQL:
+		return func(_ int) string { return "?" }
+	case constants.Postgres:
+		return func(i int) string { return fmt.Sprintf("$%d", i) }
+	case constants.Oracle:
+		return func(i int) string { return fmt.Sprintf(":%d", i) }
+	default:
+		return func(_ int) string { return "?" }
+	}
+}
+
+// QuoteTable returns the properly quoted schema.table combination
+func QuoteTable(schema, table string, driver constants.DriverType) string {
+	return fmt.Sprintf("%s.%s",
+		QuoteIdentifier(schema, driver),
+		QuoteIdentifier(table, driver))
+}
+
+// QuoteColumns returns a slice of quoted column names
+func QuoteColumns(columns []string, driver constants.DriverType) []string {
+	quoted := make([]string, len(columns))
+	for i, col := range columns {
+		quoted[i] = QuoteIdentifier(col, driver)
+	}
+	return quoted
+}
+
 // MinMaxQuery returns the query to fetch MIN and MAX values of a column in a Postgres table
 func MinMaxQuery(stream types.StreamInterface, column string) string {
-	return fmt.Sprintf(`SELECT MIN(%[1]s) AS min_value, MAX(%[1]s) AS max_value FROM %[2]s.%[3]s`, column, stream.Namespace(), stream.Name())
+	quotedColumn := QuoteIdentifier(column, constants.Postgres)
+	quotedTable := QuoteTable(stream.Namespace(), stream.Name(), constants.Postgres)
+	return fmt.Sprintf(
+		`SELECT MIN(%[1]s) AS min_value, MAX(%[1]s) AS max_value FROM %[2]s`,
+		quotedColumn, quotedTable,
+	)
 }
 
 // NextChunkEndQuery returns the query to calculate the next chunk boundary
@@ -38,14 +87,16 @@ func MinMaxQuery(stream types.StreamInterface, column string) string {
 //	  ORDER BY id, created_at
 //	  LIMIT 1 OFFSET 1000
 //	) AS subquery
-func NextChunkEndQuery(stream types.StreamInterface, columns []string, chunkSize int64, filter string) string {
+func NextChunkEndQuery(stream types.StreamInterface, columns []string, chunkSize int64) string {
+	quotedCols := QuoteColumns(columns, constants.MySQL)
+	quotedTable := QuoteTable(stream.Namespace(), stream.Name(), constants.MySQL)
+
 	var query strings.Builder
 	// SELECT with quoted and concatenated values
-	fmt.Fprintf(&query, "SELECT CONCAT_WS(',', %s) AS key_str FROM (SELECT %s FROM `%s`.`%s`",
-		strings.Join(columns, ", "),
-		strings.Join(columns, ", "),
-		stream.Namespace(),
-		stream.Name(),
+	fmt.Fprintf(&query, "SELECT CONCAT_WS(',', %s) AS key_str FROM (SELECT %s FROM %s",
+		strings.Join(quotedCols, ", "),
+		strings.Join(quotedCols, ", "),
+		quotedTable,
 	)
 	// WHERE clause for lexicographic "greater than"
 	query.WriteString(" WHERE ")
@@ -56,17 +107,13 @@ func NextChunkEndQuery(stream types.StreamInterface, columns []string, chunkSize
 		}
 		query.WriteString("(")
 		for equalityColIndex := 0; equalityColIndex < currentColIndex; equalityColIndex++ {
-			fmt.Fprintf(&query, "`%s` = ? AND ", columns[equalityColIndex])
+			fmt.Fprintf(&query, "%s = ? AND ", quotedCols[equalityColIndex])
 		}
-		fmt.Fprintf(&query, "`%s` > ?", columns[currentColIndex])
+		fmt.Fprintf(&query, "%s > ?", quotedCols[currentColIndex])
 		query.WriteString(")")
 	}
-	// applies filters here
-	if filter != "" {
-		query.WriteString(" AND (" + filter + ")")
-	}
-	// ORDER and skip OFFSET number of rows and then return the next row
-	fmt.Fprintf(&query, " ORDER BY %s", strings.Join(columns, ", "))
+	// ORDER + LIMIT
+	fmt.Fprintf(&query, " ORDER BY %s", strings.Join(quotedCols, ", "))
 	fmt.Fprintf(&query, " LIMIT 1 OFFSET %d) AS subquery", chunkSize)
 	return query.String()
 }
@@ -94,36 +141,37 @@ func PostgresWalLSNQuery() string {
 }
 
 // PostgresNextChunkEndQuery generates a SQL query to fetch the maximum value of a specified column
-func PostgresNextChunkEndQuery(stream types.StreamInterface, filterColumn string, filterValue interface{}, batchSize int, extraFilter string) string {
-	baseCond := fmt.Sprintf(`%s > %v`, filterColumn, filterValue)
-	baseCond = utils.Ternary(extraFilter == "", baseCond, fmt.Sprintf(`(%s) AND (%s)`, baseCond, extraFilter)).(string)
-	return fmt.Sprintf(`SELECT MAX(%s) FROM (SELECT %s FROM "%s"."%s" WHERE %s ORDER BY %s ASC LIMIT %d) AS T`, filterColumn, filterColumn, stream.Namespace(), stream.Name(), baseCond, filterColumn, batchSize)
-}
-
-// PostgresMinQuery returns the query to fetch the minimum value of a column in PostgreSQL
-func PostgresMinQuery(stream types.StreamInterface, filterColumn string, filterValue interface{}) string {
-	return fmt.Sprintf(`SELECT MIN(%s) FROM "%s"."%s" WHERE %s > %v`, filterColumn, stream.Namespace(), stream.Name(), filterColumn, filterValue)
+func PostgresNextChunkEndQuery(stream types.StreamInterface, filterColumn string, filterValue interface{}) string {
+	quotedColumn := QuoteIdentifier(filterColumn, constants.Postgres)
+	quotedTable := QuoteTable(stream.Namespace(), stream.Name(), constants.Postgres)
+	baseCond := fmt.Sprintf(`%s > %v`, quotedColumn, filterValue)
+	return fmt.Sprintf(`SELECT MAX(%s) FROM (SELECT %s FROM %s WHERE %s ORDER BY %s ASC LIMIT %d) AS T`,
+		quotedColumn, quotedColumn, quotedTable, baseCond, quotedColumn, 10000)
 }
 
 // PostgresBuildSplitScanQuery builds a chunk scan query for PostgreSQL
 func PostgresChunkScanQuery(stream types.StreamInterface, filterColumn string, chunk types.Chunk, filter string) string {
+	quotedFilterColumn := QuoteIdentifier(filterColumn, constants.Postgres)
+	quotedTable := QuoteTable(stream.Namespace(), stream.Name(), constants.Postgres)
+
 	chunkCond := ""
 	if chunk.Min != nil && chunk.Max != nil {
-		chunkCond = fmt.Sprintf("%s >= %v AND %s < %v", filterColumn, chunk.Min, filterColumn, chunk.Max)
+		chunkCond = fmt.Sprintf("%s >= %v AND %s < %v", quotedFilterColumn, chunk.Min, quotedFilterColumn, chunk.Max)
 	} else if chunk.Min != nil {
-		chunkCond = fmt.Sprintf("%s >= %v", filterColumn, chunk.Min)
+		chunkCond = fmt.Sprintf("%s >= %v", quotedFilterColumn, chunk.Min)
 	} else if chunk.Max != nil {
-		chunkCond = fmt.Sprintf("%s < %v", filterColumn, chunk.Max)
+		chunkCond = fmt.Sprintf("%s < %v", quotedFilterColumn, chunk.Max)
 	}
 
 	chunkCond = utils.Ternary(filter != "" && chunkCond != "", fmt.Sprintf("(%s) AND (%s)", chunkCond, filter), chunkCond).(string)
-	return fmt.Sprintf(`SELECT * FROM "%s"."%s" WHERE %s`, stream.Namespace(), stream.Name(), chunkCond)
+	return fmt.Sprintf(`SELECT * FROM %s WHERE %s`, quotedTable, chunkCond)
 }
 
 // MySQL-Specific Queries
 // buildChunkConditionMySQL builds the condition for a chunk in MySQL
 func buildChunkConditionMySQL(filterColumns []string, chunk types.Chunk, extraFilter string) string {
-	colTuple := "(" + strings.Join(filterColumns, ", ") + ")"
+	quotedCols := QuoteColumns(filterColumns, constants.MySQL)
+	colTuple := "(" + strings.Join(quotedCols, ", ") + ")"
 
 	buildSQLTuple := func(val any) string {
 		parts := strings.Split(val.(string), ",")
@@ -150,7 +198,8 @@ func buildChunkConditionMySQL(filterColumns []string, chunk types.Chunk, extraFi
 
 // MysqlLimitOffsetScanQuery is used to get the rows
 func MysqlLimitOffsetScanQuery(stream types.StreamInterface, chunk types.Chunk, filter string) string {
-	query := fmt.Sprintf("SELECT * FROM `%s`.`%s`", stream.Namespace(), stream.Name())
+	quotedTable := QuoteTable(stream.Namespace(), stream.Name(), constants.MySQL)
+	query := fmt.Sprintf("SELECT * FROM %s", quotedTable)
 	query = utils.Ternary(filter == "", query, fmt.Sprintf("%s WHERE %s", query, filter)).(string)
 	if chunk.Min == nil {
 		maxVal, _ := strconv.ParseUint(chunk.Max.(string), 10, 64)
@@ -170,29 +219,29 @@ func MysqlLimitOffsetScanQuery(stream types.StreamInterface, chunk types.Chunk, 
 // MySQLWithoutState builds a chunk scan query for MySql
 func MysqlChunkScanQuery(stream types.StreamInterface, filterColumns []string, chunk types.Chunk, extraFilter string) string {
 	condition := buildChunkConditionMySQL(filterColumns, chunk, extraFilter)
-	return fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE %s", stream.Namespace(), stream.Name(), condition)
+	quotedTable := QuoteTable(stream.Namespace(), stream.Name(), constants.MySQL)
+	return fmt.Sprintf("SELECT * FROM %s WHERE %s", quotedTable, condition)
 }
 
 // MinMaxQueryMySQL returns the query to fetch MIN and MAX values of a column in a MySQL table
-func MinMaxQueryMySQL(stream types.StreamInterface, columns []string, filter string) string {
-	concatCols := fmt.Sprintf("CONCAT_WS(',', %s)", strings.Join(columns, ", "))
-	orderAsc := strings.Join(columns, ", ")
-	descCols := make([]string, len(columns))
-	for i, col := range columns {
+func MinMaxQueryMySQL(stream types.StreamInterface, columns []string) string {
+	quotedCols := QuoteColumns(columns, constants.MySQL)
+	quotedTable := QuoteTable(stream.Namespace(), stream.Name(), constants.MySQL)
+	concatCols := fmt.Sprintf("CONCAT_WS(',', %s)", strings.Join(quotedCols, ", "))
+
+	orderAsc := strings.Join(quotedCols, ", ")
+	descCols := make([]string, len(quotedCols))
+	for i, col := range quotedCols {
 		descCols[i] = col + " DESC"
 	}
 	orderDesc := strings.Join(descCols, ", ")
-	filterClause := ""
-	if filter != "" {
-		filterClause = fmt.Sprintf("WHERE %s", filter)
-	}
 	return fmt.Sprintf(`
-	SELECT
-		(SELECT %s FROM %s.%s %s ORDER BY %s LIMIT 1) AS min_value,
-		(SELECT %s FROM %s.%s %s ORDER BY %s LIMIT 1) AS max_value
-	`,
-		concatCols, stream.Namespace(), stream.Name(), filterClause, orderAsc,
-		concatCols, stream.Namespace(), stream.Name(), filterClause, orderDesc,
+    SELECT
+        (SELECT %s FROM %s ORDER BY %s LIMIT 1) AS min_value,
+        (SELECT %s FROM %s ORDER BY %s LIMIT 1) AS max_value
+    `,
+		concatCols, quotedTable, orderAsc,
+		concatCols, quotedTable, orderDesc,
 	)
 }
 
@@ -249,6 +298,12 @@ func MySQLTableRowStatsQuery() string {
 		WHERE TABLE_SCHEMA = DATABASE()
 		AND TABLE_NAME = ?
 	`
+}
+
+// MySQLTableExistsQuery returns the query to check if a table has any rows using EXISTS
+func MySQLTableExistsQuery(stream types.StreamInterface) string {
+	quotedTable := QuoteTable(stream.Namespace(), stream.Name(), constants.MySQL)
+	return fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s LIMIT 1)", quotedTable)
 }
 
 // MySQLMasterStatusQuery returns the query to fetch the current binlog position in MySQL: mysql v8.3 and below
@@ -350,16 +405,18 @@ func OraclePrimaryKeyColummsQuery(schemaName, tableName string) string {
 
 // OracleChunkScanQuery returns the query to fetch the rows of a table in OracleDB
 func OracleChunkScanQuery(stream types.StreamInterface, chunk types.Chunk, filter string) string {
-	currentSCN := strings.Split(chunk.Min.(string), ",")[0]
-	chunkMin := strings.Split(chunk.Min.(string), ",")[1]
+	chunkMin := chunk.Min.(string)
+	quotedTable := QuoteTable(stream.Namespace(), stream.Name(), constants.Oracle)
 
 	filterClause := utils.Ternary(filter == "", "", " AND ("+filter+")").(string)
 
 	if chunk.Max != nil {
 		chunkMax := chunk.Max.(string)
-		return fmt.Sprintf("SELECT * FROM %q.%q AS OF SCN %s WHERE ROWID >= '%v' AND ROWID < '%v' %s", stream.Namespace(), stream.Name(), currentSCN, chunkMin, chunkMax, filterClause)
+		return fmt.Sprintf("SELECT * FROM %s WHERE ROWID >= '%v' AND ROWID < '%v' %s",
+			quotedTable, chunkMin, chunkMax, filterClause)
 	}
-	return fmt.Sprintf("SELECT * FROM %q.%q AS OF SCN %s WHERE ROWID >= '%v' %s", stream.Namespace(), stream.Name(), currentSCN, chunkMin, filterClause)
+	return fmt.Sprintf("SELECT * FROM %s WHERE ROWID >= '%v' %s",
+		quotedTable, chunkMin, filterClause)
 }
 
 // OracleTableSizeQuery returns the query to fetch the size of a table in bytes in OracleDB
@@ -367,14 +424,10 @@ func OracleBlockSizeQuery() string {
 	return `SELECT CEIL(BYTES / NULLIF(BLOCKS, 0)) FROM user_segments WHERE BLOCKS IS NOT NULL AND ROWNUM =1`
 }
 
-// OracleCurrentSCNQuery returns the query to fetch the current SCN in OracleDB
-func OracleCurrentSCNQuery() string {
-	return `SELECT TO_CHAR(DBMS_FLASHBACK.GET_SYSTEM_CHANGE_NUMBER) AS SCN_STR FROM DUAL`
-}
-
 // OracleEmptyCheckQuery returns the query to check if a table is empty in OracleDB
 func OracleEmptyCheckQuery(stream types.StreamInterface) string {
-	return fmt.Sprintf("SELECT 1 FROM %q.%q WHERE ROWNUM = 1", stream.Namespace(), stream.Name())
+	quotedTable := QuoteTable(stream.Namespace(), stream.Name(), constants.Oracle)
+	return fmt.Sprintf("SELECT 1 FROM %s WHERE ROWNUM = 1", quotedTable)
 }
 
 // OracleTaskCreationQuery returns the query to create a task in OracleDB
@@ -408,11 +461,13 @@ func OracleChunkRetrievalQuery(taskName string) string {
 }
 
 // OracleIncrementalValueFormatter is used to format the value of the cursor field for Oracle incremental sync, mainly because of the various timestamp formats
-func OracleIncrementalValueFormatter(cursorField, argumentPlaceholder string, lastCursorValue any, opts IncrementalConditionOptions) (string, any, error) {
+func OracleIncrementalValueFormatter(cursorField, argumentPlaceholder string, isBackfill bool, lastCursorValue any, opts DriverOptions) (string, any, error) {
 	// Get the datatype of the cursor field from streams
 	stream := opts.Stream
+	// in case of incremental sync mode, during backfill to avoid duplicate records we need to use '<=', otherwise use '>'
+	operator := utils.Ternary(isBackfill, "<=", ">").(string)
 	// remove cursorField conversion to lower case once column normalization is based on writer side
-	datatype, err := stream.Self().Stream.Schema.GetType(strings.ToLower(cursorField))
+	datatype, err := stream.Self().Stream.Schema.GetType(cursorField)
 	if err != nil {
 		return "", nil, fmt.Errorf("cursor field %s not found in schema: %s", cursorField, err)
 	}
@@ -429,18 +484,29 @@ func OracleIncrementalValueFormatter(cursorField, argumentPlaceholder string, la
 		return "", nil, fmt.Errorf("failed to get column datatype: %s", err)
 	}
 	// if the cursor field is a timestamp and not timezone aware, we need to cast the value as timestamp
+	quotedCol := QuoteIdentifier(cursorField, constants.Oracle)
 	if isTimestamp && !strings.Contains(string(datatype), "TIME ZONE") {
-		return fmt.Sprintf("%q >= CAST(%s AS TIMESTAMP)", cursorField, argumentPlaceholder), formattedValue, nil
+		return fmt.Sprintf("%s %s CAST(%s AS TIMESTAMP)", quotedCol, operator, argumentPlaceholder), formattedValue, nil
 	}
-	return fmt.Sprintf("%q >= %s", cursorField, argumentPlaceholder), formattedValue, nil
+	return fmt.Sprintf("%s %s %s", quotedCol, operator, argumentPlaceholder), formattedValue, nil
 }
 
-// ParseFilter converts a filter string to a valid SQL WHERE condition
-func SQLFilter(stream types.StreamInterface, driver string) (string, error) {
+// ParseFilter converts a filter string to a valid SQL WHERE condition, also appends the threshold filter if present
+func SQLFilter(stream types.StreamInterface, driver string, thresholdFilter string) (string, error) {
 	buildCondition := func(cond types.Condition, driver string) (string, error) {
-		// Get column quote style
-		quote := utils.Ternary(driver == "mysql", "`", "\"").(string)
-		quotedColumn := fmt.Sprintf("%s%s%s", quote, cond.Column, quote)
+		var driverType constants.DriverType
+		switch driver {
+		case "mysql":
+			driverType = constants.MySQL
+		case "postgres":
+			driverType = constants.Postgres
+		case "oracle":
+			driverType = constants.Oracle
+		default:
+			driverType = constants.Postgres // default fallback
+		}
+
+		quotedColumn := QuoteIdentifier(cond.Column, driverType)
 
 		// Handle unquoted null value
 		if cond.Value == "null" {
@@ -478,13 +544,14 @@ func SQLFilter(stream types.StreamInterface, driver string) (string, error) {
 		return "", fmt.Errorf("failed to parse stream filter: %s", err)
 	}
 
+	var finalFilter string
+	var filterErr error
 	switch {
 	case len(filter.Conditions) == 0:
-		return "", nil // No conditions, return empty string
+		return thresholdFilter, nil
 	case len(filter.Conditions) == 1:
-		return buildCondition(filter.Conditions[0], driver)
+		finalFilter, filterErr = buildCondition(filter.Conditions[0], driver)
 	default:
-		// for size 2
 		conditions := make([]string, 0, len(filter.Conditions))
 		err := utils.ForEach(filter.Conditions, func(cond types.Condition) error {
 			formatted, err := buildCondition(cond, driver)
@@ -494,21 +561,22 @@ func SQLFilter(stream types.StreamInterface, driver string) (string, error) {
 			conditions = append(conditions, formatted)
 			return nil
 		})
-		return strings.Join(conditions, fmt.Sprintf(" %s ", filter.LogicalOperator)), err
+		finalFilter, filterErr = strings.Join(conditions, fmt.Sprintf(" %s ", filter.LogicalOperator)), err
 	}
+
+	return utils.Ternary(thresholdFilter == "", finalFilter, fmt.Sprintf("(%s) AND (%s)", thresholdFilter, finalFilter)).(string), filterErr
 }
 
-// IncrementalConditionOptions contains options for building incremental conditions
-type IncrementalConditionOptions struct {
+// DriverOptions contains options for creating various queries
+type DriverOptions struct {
 	Driver constants.DriverType
 	Stream types.StreamInterface
 	State  *types.State
 	Client *sqlx.DB
-	Filter string
 }
 
 // BuildIncrementalQuery generates the incremental query SQL based on driver type
-func BuildIncrementalQuery(opts IncrementalConditionOptions) (string, []any, error) {
+func BuildIncrementalQuery(opts DriverOptions) (string, []any, error) {
 	primaryCursor, secondaryCursor := opts.Stream.Cursor()
 	lastPrimaryCursorValue := opts.State.GetCursor(opts.Stream.Self(), primaryCursor)
 	lastSecondaryCursorValue := opts.State.GetCursor(opts.Stream.Self(), secondaryCursor)
@@ -520,37 +588,15 @@ func BuildIncrementalQuery(opts IncrementalConditionOptions) (string, []any, err
 		logger.Warnf("last secondary cursor value is nil for stream[%s]", opts.Stream.ID())
 	}
 
-	// Get placeholder and quotes style based on driver
-	var (
-		placeholder     func(int) string
-		quoteIdentifier func(string) string
-	)
-	switch opts.Driver {
-	case constants.MySQL:
-		{
-			placeholder = func(_ int) string { return "?" }
-			quoteIdentifier = func(identifier string) string { return fmt.Sprintf("`%s`", identifier) }
-		}
-	case constants.Postgres:
-		{
-			placeholder = func(i int) string { return fmt.Sprintf("$%d", i) }
-			quoteIdentifier = func(identifier string) string { return identifier } // postgres doesn't require quotes
-		}
-	case constants.Oracle:
-		{
-			placeholder = func(i int) string { return fmt.Sprintf(":%d", i) }
-			quoteIdentifier = func(identifier string) string { return fmt.Sprintf("%q", identifier) }
-		}
-	default:
-		return "", nil, fmt.Errorf("unsupported driver: %s", string(opts.Driver))
-	}
+	placeholder := GetPlaceholder(opts.Driver)
 
 	// buildCursorCondition creates the SQL condition for incremental queries based on cursor fields.
 	buildCursorCondition := func(cursorField string, lastCursorValue any, argumentPosition int) (string, any, error) {
 		if opts.Driver == constants.Oracle {
-			return OracleIncrementalValueFormatter(cursorField, placeholder(argumentPosition), lastCursorValue, opts)
+			return OracleIncrementalValueFormatter(cursorField, placeholder(argumentPosition), false, lastCursorValue, opts)
 		}
-		return fmt.Sprintf("%s >= %s", quoteIdentifier(cursorField), placeholder(argumentPosition)), lastCursorValue, nil
+		quotedColumn := QuoteIdentifier(cursorField, opts.Driver)
+		return fmt.Sprintf("%s > %s", quotedColumn, placeholder(argumentPosition)), lastCursorValue, nil
 	}
 
 	// Build primary cursor condition
@@ -566,13 +612,92 @@ func BuildIncrementalQuery(opts IncrementalConditionOptions) (string, []any, err
 		if err != nil {
 			return "", nil, fmt.Errorf("failed to format secondary cursor value: %s", err)
 		}
-		incrementalCondition = fmt.Sprintf("%s OR (%s IS NULL AND %s)", incrementalCondition, quoteIdentifier(primaryCursor), secondaryCondition)
+		quotedPrimaryCursor := QuoteIdentifier(primaryCursor, opts.Driver)
+		incrementalCondition = fmt.Sprintf("%s OR (%s IS NULL AND %s)",
+			incrementalCondition, quotedPrimaryCursor, secondaryCondition)
 		queryArgs = append(queryArgs, secondaryArg)
 	}
 
-	finalFilter := utils.Ternary(opts.Filter != "", fmt.Sprintf("(%s) AND (%s)", opts.Filter, incrementalCondition), incrementalCondition).(string)
-	logger.Infof("Starting incremental sync for stream[%s] with filter: %s and args: %v", opts.Stream.ID(), finalFilter, queryArgs)
-	incrementalQuery := fmt.Sprintf("SELECT * FROM %s.%s WHERE %s", quoteIdentifier(opts.Stream.Namespace()), quoteIdentifier(opts.Stream.Name()), finalFilter)
+	logger.Infof("Starting incremental sync for stream[%s] with condition: %s and args: %v", opts.Stream.ID(), incrementalCondition, queryArgs)
+
+	// Use QuoteTable helper function for consistent table quoting
+	quotedTable := QuoteTable(opts.Stream.Namespace(), opts.Stream.Name(), opts.Driver)
+	incrementalQuery := fmt.Sprintf("SELECT * FROM %s WHERE (%s)", quotedTable, incrementalCondition)
 
 	return incrementalQuery, queryArgs, nil
+}
+
+func GetMaxCursorValues(ctx context.Context, client *sqlx.DB, driverType constants.DriverType, stream types.StreamInterface) (any, any, error) {
+	primaryCursor, secondaryCursor := stream.Cursor()
+	quotedTable := QuoteTable(stream.Namespace(), stream.Name(), driverType)
+
+	primaryCursorQuoted := QuoteIdentifier(primaryCursor, driverType)
+	secondaryCursorQuoted := QuoteIdentifier(secondaryCursor, driverType)
+
+	var maxPrimaryCursorValue, maxSecondaryCursorValue any
+
+	bytesConverter := func(value any) any {
+		switch v := value.(type) {
+		case []byte:
+			return string(v)
+		default:
+			return v
+		}
+	}
+
+	cursorValueQuery := utils.Ternary(secondaryCursor == "",
+		fmt.Sprintf("SELECT MAX(%s) FROM %s", primaryCursorQuoted, quotedTable),
+		fmt.Sprintf("SELECT MAX(%s), MAX(%s) FROM %s", primaryCursorQuoted, secondaryCursorQuoted, quotedTable)).(string)
+
+	if secondaryCursor != "" {
+		err := client.QueryRowContext(ctx, cursorValueQuery).Scan(&maxPrimaryCursorValue, &maxSecondaryCursorValue)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to scan the cursor values: %s", err)
+		}
+		maxSecondaryCursorValue = bytesConverter(maxSecondaryCursorValue)
+	} else {
+		err := client.QueryRowContext(ctx, cursorValueQuery).Scan(&maxPrimaryCursorValue)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to scan primary cursor value: %s", err)
+		}
+	}
+	return bytesConverter(maxPrimaryCursorValue), maxSecondaryCursorValue, nil
+}
+
+// ThresholdFilter is used to update the filter for initial run of incremental sync during backfill.
+// This is to avoid dupliction of records, as max cursor value is fetched before the chunk creation.
+func ThresholdFilter(opts DriverOptions) (string, []any, error) {
+	if opts.Stream.GetSyncMode() != types.INCREMENTAL {
+		return "", nil, nil
+	}
+	primaryCursor, secondaryCursor := opts.Stream.Cursor()
+	primaryCursorValue := opts.State.GetCursor(opts.Stream.Self(), primaryCursor)
+	placeholder := GetPlaceholder(opts.Driver)
+
+	createThresholdCondition := func(argumentPosition int, cursorField string, cursorValue any) (string, any, error) {
+		if opts.Driver == constants.Oracle {
+			return OracleIncrementalValueFormatter(cursorField, placeholder(argumentPosition), true, cursorValue, opts)
+		}
+		conditionFilter := fmt.Sprintf("%s <= %s", QuoteIdentifier(cursorField, opts.Driver), placeholder(argumentPosition))
+		return conditionFilter, cursorValue, nil
+	}
+
+	thresholdFilter, argument, err := createThresholdCondition(1, primaryCursor, primaryCursorValue)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to format primary cursor value: %s", err)
+	}
+	// IS NULL condition is required to handle the case where cursor value is NULL for some rows.
+	// Some driver will avoid returning such rows when <= condition is used.
+	thresholdFilter = fmt.Sprintf("(%s IS NULL OR %s)", QuoteIdentifier(primaryCursor, opts.Driver), thresholdFilter)
+	arguments := []any{argument}
+	if secondaryCursor != "" {
+		secondaryCursorValue := opts.State.GetCursor(opts.Stream.Self(), secondaryCursor)
+		secondaryCondition, argument, err := createThresholdCondition(2, secondaryCursor, secondaryCursorValue)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to format secondary cursor value: %s", err)
+		}
+		thresholdFilter = fmt.Sprintf("%s AND (%s IS NULL OR %s)", thresholdFilter, QuoteIdentifier(secondaryCursor, opts.Driver), secondaryCondition)
+		arguments = append(arguments, argument)
+	}
+	return thresholdFilter, arguments, nil
 }

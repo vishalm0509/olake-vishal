@@ -11,16 +11,10 @@ import (
 )
 
 func (p *Postgres) StreamIncrementalChanges(ctx context.Context, stream types.StreamInterface, processFn abstract.BackfillMsgFn) error {
-	filter, err := jdbc.SQLFilter(stream, p.Type())
-	if err != nil {
-		return fmt.Errorf("failed to parse filter during chunk iteration: %s", err)
-	}
-
-	opts := jdbc.IncrementalConditionOptions{
+	opts := jdbc.DriverOptions{
 		Driver: constants.Postgres,
 		Stream: stream,
 		State:  p.state,
-		Filter: filter,
 	}
 	incrementalQuery, queryArgs, err := jdbc.BuildIncrementalQuery(opts)
 	if err != nil {
@@ -39,9 +33,17 @@ func (p *Postgres) StreamIncrementalChanges(ctx context.Context, stream types.St
 			return fmt.Errorf("failed to scan record: %s", err)
 		}
 
-		if err := processFn(record); err != nil {
+		if err := processFn(ctx, record); err != nil {
 			return fmt.Errorf("process error: %s", err)
 		}
 	}
 	return rows.Err()
+}
+
+func (p *Postgres) FetchMaxCursorValues(ctx context.Context, stream types.StreamInterface) (any, any, error) {
+	maxPrimaryCursorValue, maxSecondaryCursorValue, err := jdbc.GetMaxCursorValues(ctx, p.client, constants.Postgres, stream)
+	if err != nil {
+		return nil, nil, err
+	}
+	return maxPrimaryCursorValue, maxSecondaryCursorValue, nil
 }
